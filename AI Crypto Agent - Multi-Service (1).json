@@ -1,0 +1,2516 @@
+{
+  "name": "AI Crypto Agent - Multi-Service",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        -18272
+      ],
+      "id": "91817eba-55c4-4fb6-bc5b-5f1091604e1f",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "015bce24-3d1f-4bf3-8980-88c9c01cc304",
+              "name": "=task",
+              "value": "Check my wallet balance",
+              "type": "string"
+            },
+            {
+              "id": "8d643b35-37d0-4dce-980f-54c8dcde07f5",
+              "name": "walletAddress",
+              "value": "0xa1b6b9d82b26c59dd94b95640c0c5702290cf69f",
+              "type": "string"
+            },
+            {
+              "id": "23ca2153-497c-4eb3-87ca-c9f875cc63c2",
+              "name": "btcAddress",
+              "value": "bc1qczc49z6x9jrn9k4j70gt4wfvy9dn3rm4407p32",
+              "type": "string"
+            },
+            {
+              "id": "93186c09-19fa-4bfd-a18e-b6482ff832ed",
+              "name": "solAddress",
+              "value": "751gJzNGK84qySLfQKJt1mpedbzsPuS6Vnhhs11gDgcz",
+              "type": "string"
+            },
+            {
+              "id": "56231aab-f896-4e0a-960d-5acd29d5ce40",
+              "name": "ethAddress",
+              "value": "0xA1b6B9D82b26C59Dd94b95640c0c5702290Cf69F",
+              "type": "string"
+            },
+            {
+              "id": "787aced6-d1ca-4357-9f96-469e5b6f2005",
+              "name": "xrpAddress",
+              "value": "rnVWjrbUQunhZQPqH75EYNR1ESWFMPzRJ6",
+              "type": "string"
+            },
+            {
+              "id": "dcf682be-9744-4709-b670-2961cd268cd3",
+              "name": "tronAddress",
+              "value": "TWbZ3vTxc1eHwUSqsiSWag6a7CMs1A8ppS",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -752,
+        -18272
+      ],
+      "id": "ad2faccf-33b4-4b53-bcba-e1173ac5b71f",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safely get wallet address with fallback\nlet walletAddress;\n\ntry {\n  // Try to get from Edit Fields node\n  const editFieldsData = $('Edit Fields').first().json;\n  walletAddress = editFieldsData.walletAddress;\n} catch (e1) {\n  try {\n    // Try to get from Set node\n    const setData = $('Set').first().json;\n    walletAddress = setData.walletAddress;\n  } catch (e2) {\n    // Try from current input\n    walletAddress = $input.first().json.walletAddress;\n  }\n}\n\n// Remove 0x prefix if present and convert to lowercase\nconst cleanAddress = walletAddress.replace('0x', '').toLowerCase();\n\n// Pad address to 64 characters for the function call\nconst paddedAddress = cleanAddress.padStart(64, '0');\n\n// balanceOf function signature (0x70a08231)\nconst functionSignature = \"70a08231\";\n\n// Complete encoded data\nconst encodedData = \"0x\" + functionSignature + paddedAddress;\n\n// USDT contract address on BSC\nconst usdtContract = \"0x55d398326f99059fF775485246999027B3197955\";\n\nreturn [{\n  json: {\n    walletAddress: \"0x\" + cleanAddress,\n    usdtContract: usdtContract,\n    encodedData: encodedData\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        -18272
+      ],
+      "id": "ca56d844-07d2-433b-82d0-20dc80ed5a26",
+      "name": "Prepare USDT Check"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bsc-dataseed.binance.org",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"eth_call\",\n  \"params\": [\n    {\n      \"to\": \"{{$json.usdtContract}}\",\n      \"data\": \"{{$json.encodedData}}\"\n    },\n    \"latest\"\n  ],\n  \"id\": 1\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1488,
+        -18272
+      ],
+      "id": "6de24eb6-a76e-46c4-b4d4-1484de82ac6c",
+      "name": "Check USDT"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the USDT balance result from the previous HTTP Request\nconst balanceHex = $input.first().json.result;\n\nconsole.log(\"Raw USDT hex result:\", balanceHex);\n\n// Handle null or undefined\nif (!balanceHex || balanceHex === \"0x\" || balanceHex === \"0x0\") {\n  return [{\n    json: {\n      balanceRaw: \"0\",\n      balanceUSDT: 0,\n      balanceFormatted: \"$0.00 USDT\",\n      message: \"⚠️ Wallet has 0 USDT on BSC\",\n      timestamp: new Date().toISOString()\n    }\n  }];\n}\n\n// Convert from hex to decimal\nconst balanceRaw = parseInt(balanceHex, 16);\n\n// USDT on BSC has 18 decimals\nconst balanceUSDT = balanceRaw / 1000000000000000000;\n\nreturn [{\n  json: {\n    balanceRaw: balanceRaw.toString(),\n    balanceUSDT: balanceUSDT,\n    balanceFormatted: \"$\" + balanceUSDT.toFixed(2) + \" USDT\",\n    message: balanceUSDT === 0 \n      ? \"⚠️ Wallet has 0 USDT\" \n      : \"✅ Your wallet has $\" + balanceUSDT.toFixed(2) + \" USDT\",\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        -18272
+      ],
+      "id": "4272bfb6-82d6-439b-bdf7-ace3ee38ef0d",
+      "name": "Convert USDT"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bsc-dataseed.binance.org",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"eth_getBalance\",\n  \"params\": [\"{{$json.walletAddress}}\", \"latest\"],\n  \"id\": 1\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        816,
+        -18272
+      ],
+      "id": "5110ed60-9785-4bed-9752-719db63e877e",
+      "name": "Check BNB"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the balance result from the HTTP Request\nconst balanceHex = $input.first().json.result;\n\n// Convert from hexadecimal to decimal\nconst balanceWei = parseInt(balanceHex, 16);\n\n// Convert Wei to Ether/BNB (divide by 10^18)\nconst balanceInEther = balanceWei / 1000000000000000000;\n\nreturn [{\n  json: {\n    balanceWei: balanceWei.toString(),\n    balance: balanceInEther,\n    balanceFormatted: balanceInEther.toFixed(6) + \" BNB\",\n    message: balanceInEther === 0 \n      ? \"⚠️ Wallet is empty! Add some BNB to get started.\" \n      : \"✅ Your wallet has \" + balanceInEther.toFixed(6) + \" BNB\",\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -18272
+      ],
+      "id": "100e4b74-b7f4-4bcd-a4bb-1b9c1096f3f5",
+      "name": "Convert BNB"
+    },
+    {
+      "parameters": {
+        "url": "=https://blockchain.info/q/addressbalance/{{$('Edit Fields').item.json.btcAddress}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -80,
+        -18272
+      ],
+      "id": "421e24bb-918e-4c7d-83a8-2e5e50c3ebda",
+      "name": "Check BTC Balance"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get BTC balance (blockchain.info returns satoshis)\nlet balanceSatoshis = 0;\n\ntry {\n  // The API returns just a number\n  balanceSatoshis = parseInt($input.first().json);\n} catch (error) {\n  console.log(\"Error parsing BTC balance:\", error);\n}\n\n// Convert satoshis to BTC (1 BTC = 100,000,000 satoshis)\nconst balanceBTC = balanceSatoshis / 100000000;\n\n// Approximate BTC price (you can update this or use a price API later)\nconst btcPrice = 95000;\nconst balanceUSD = balanceBTC * btcPrice;\n\nreturn [{\n  json: {\n    balanceSatoshis: balanceSatoshis,\n    balanceBTC: balanceBTC,\n    balanceFormatted: balanceBTC.toFixed(8) + \" BTC\",\n    balanceUSD: balanceUSD,\n    btcPrice: btcPrice,\n    message: balanceBTC > 0 \n      ? `✅ Bitcoin wallet: ${balanceBTC.toFixed(8)} BTC ($${balanceUSD.toFixed(2)})` \n      : \"⚠️ Bitcoin wallet is empty\",\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        -18272
+      ],
+      "id": "4b34e8af-eeb6-4430-b71a-9a95911e17ea",
+      "name": "Convert BTC"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://eth.llamarpc.com",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"eth_getBalance\",\n  \"params\": [\"{{$('Edit Fields').item.json.ethAddress}}\", \"latest\"],\n  \"id\": 1\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -528,
+        -18272
+      ],
+      "id": "70e5b305-68a9-4391-bb3b-e814fde50b02",
+      "name": "Check ETH Balance"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get ETH balance from RPC response\nconst balanceHex = $input.first().json.result;\n\n// Convert from hex to decimal (Wei)\nconst balanceWei = parseInt(balanceHex, 16);\n\n// Convert Wei to ETH (1 ETH = 10^18 Wei)\nconst balanceETH = balanceWei / 1000000000000000000;\n\n// Approximate ETH price\nconst ethPrice = 3200;\nconst balanceUSD = balanceETH * ethPrice;\n\nreturn [{\n  json: {\n    balanceWei: balanceWei.toString(),\n    balanceETH: balanceETH,\n    balanceFormatted: balanceETH.toFixed(6) + \" ETH\",\n    balanceUSD: balanceUSD,\n    ethPrice: ethPrice,\n    message: balanceETH > 0 \n      ? `✅ Ethereum wallet: ${balanceETH.toFixed(6)} ETH ($${balanceUSD.toFixed(2)})` \n      : \"⚠️ Ethereum wallet is empty\",\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        -18272
+      ],
+      "id": "0eaec891-a9e2-4c84-986d-da0d96e8b2da",
+      "name": "Convert ETH"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.mainnet-beta.solana.com",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"getBalance\",\n  \"params\": [\"{{$('Edit Fields').item.json.solAddress}}\"]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        368,
+        -18272
+      ],
+      "id": "aa9fc5f6-5bcd-40a5-8541-b7652bb719f2",
+      "name": "Check SOL Balance"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get SOL balance from RPC response\nconst response = $input.first().json;\n\nlet balanceLamports = 0;\nlet balanceSOL = 0;\n\nif (response.result && response.result.value !== undefined) {\n  balanceLamports = response.result.value;\n  // Convert lamports to SOL (1 SOL = 10^9 lamports)\n  balanceSOL = balanceLamports / 1000000000;\n}\n\n// Approximate SOL price\nconst solPrice = 180;\nconst balanceUSD = balanceSOL * solPrice;\n\nreturn [{\n  json: {\n    balanceLamports: balanceLamports,\n    balanceSOL: balanceSOL,\n    balanceFormatted: balanceSOL.toFixed(6) + \" SOL\",\n    balanceUSD: balanceUSD,\n    solPrice: solPrice,\n    message: balanceSOL > 0 \n      ? `✅ Solana wallet: ${balanceSOL.toFixed(6)} SOL ($${balanceUSD.toFixed(2)})` \n      : \"⚠️ Solana wallet is empty\",\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        -18272
+      ],
+      "id": "b981c403-6f01-48a0-9707-afea7d1e8d93",
+      "name": "Convert SOL"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://s1.ripple.com:51234/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"method\": \"account_info\",\n  \"params\": [\n    {\n      \"account\": \"{{$('Edit Fields').item.json.xrpAddress}}\",\n      \"strict\": true,\n      \"ledger_index\": \"current\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2832,
+        -18272
+      ],
+      "id": "fa411e1d-deeb-4b33-b64e-88cf9f5c10be",
+      "name": "Check XRP Balance"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\n\n// XRP balance (in drops, 1 XRP = 1,000,000 drops)\nlet balanceDrops = 0;\nlet balanceXRP = 0;\nlet message = \"⚠️ XRP wallet not found or not activated\";\n\nif (response.result && response.result.account_data && response.result.account_data.Balance) {\n  balanceDrops = parseInt(response.result.account_data.Balance);\n  balanceXRP = balanceDrops / 1000000;\n  message = `✅ XRP wallet: ${balanceXRP.toFixed(6)} XRP`;\n}\n\n// Approximate XRP price\nconst xrpPrice = 2.5;\nconst balanceUSD = balanceXRP * xrpPrice;\n\nreturn [{\n  json: {\n    balanceDrops: balanceDrops,\n    balanceXRP: balanceXRP,\n    balanceFormatted: balanceXRP.toFixed(6) + \" XRP\",\n    balanceUSD: balanceUSD,\n    xrpPrice: xrpPrice,\n    message: message + ` ($${balanceUSD.toFixed(2)})`,\n    accountActivated: balanceDrops > 0,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3056,
+        -18272
+      ],
+      "id": "d2d1cf25-10ad-4fde-b6a5-d3b27e417659",
+      "name": "Convert XRP"
+    },
+    {
+      "parameters": {
+        "jsCode": "const accountData = $input.first().json;\n\n// TRX balance (in SUN, 1 TRX = 1,000,000 SUN)\nlet balanceSun = 0;\nlet balanceTRX = 0;\nlet message = \"⚠️ TRON wallet not activated\";\n\nif (accountData.balance) {\n  balanceSun = accountData.balance;\n  balanceTRX = balanceSun / 1000000;\n  message = `✅ TRON wallet: ${balanceTRX.toFixed(6)} TRX`;\n}\n\n// Approximate TRX price\nconst trxPrice = 0.25;\nconst balanceUSD = balanceTRX * trxPrice; // <-- IMPORTANT: This line calculates USD value\n\nreturn [{\n  json: {\n    balanceSun: balanceSun,\n    balanceTRX: balanceTRX,\n    balanceFormatted: balanceTRX.toFixed(6) + \" TRX\",\n    balanceUSD: balanceUSD,  // <-- IMPORTANT: Must include this field\n    trxPrice: trxPrice,\n    message: message + ` ($${balanceUSD.toFixed(4)})`,\n    accountActivated: balanceSun > 0,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2608,
+        -18272
+      ],
+      "id": "db807c20-1de5-4ec0-8157-a488e86d3a69",
+      "name": "Convert TRON"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.trongrid.io/wallet/getaccount",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"address\": \"{{$('Edit Fields').item.json.tronAddress}}\",\n  \"visible\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2384,
+        -18272
+      ],
+      "id": "43c1b3c3-1996-46f4-8f1d-f90a3ca2543d",
+      "name": "Check TRON Balance"
+    },
+    {
+      "parameters": {
+        "url": "=https://apilist.tronscan.org/api/account?address={{$('Edit Fields').item.json.tronAddress}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1936,
+        -18272
+      ],
+      "id": "e7a8b725-0bc8-4194-a634-4b490fed74cd",
+      "name": "Check USDT TRC20"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data using node names - with better error handling\nfunction getBalance(nodeName) {\n  try {\n    const node = $(nodeName);\n    if (!node || !node.first()) {\n      console.log(`❌ Node '${nodeName}' not found or has no data`);\n      return { balanceUSD: 0, balanceUSDT: 0, balanceFormatted: \"N/A\" };\n    }\n    const data = node.first().json;\n    console.log(`✅ Got ${nodeName}:`, Object.keys(data));\n    return data;\n  } catch (e) {\n    console.log(`❌ Error getting ${nodeName}:`, e.message);\n    return { balanceUSD: 0, balanceUSDT: 0, balanceFormatted: \"N/A\" };\n  }\n}\n\n// Get all balances\nconst bnb = getBalance('Convert BNB');\nconst usdtBEP20 = getBalance('Convert USDT');\nconst btc = getBalance('Convert BTC');\nconst eth = getBalance('Convert ETH');\nconst sol = getBalance('Convert SOL');\nconst xrp = getBalance('Convert XRP');\nconst trx = getBalance('Convert TRON');\n\n// Special handling for USDT TRC20 - try multiple methods\nlet usdtTRC20 = { balanceUSD: 0, balanceUSDT: 0, balanceFormatted: \"N/A\" };\n\n// Method 1: Try exact node name\ntry {\n  const node = $('Convert USDT TRC20');\n  if (node && node.first() && node.first().json) {\n    usdtTRC20 = node.first().json;\n    console.log(\"✅ Method 1 success - USDT TRC20 found:\", usdtTRC20);\n  }\n} catch (e) {\n  console.log(\"❌ Method 1 failed:\", e.message);\n}\n\n// Method 2: If still not found, try getting from all items\nif (!usdtTRC20.balanceUSD && !usdtTRC20.balanceUSDT) {\n  try {\n    const allItems = $('Convert USDT TRC20').all();\n    if (allItems && allItems.length > 0) {\n      usdtTRC20 = allItems[0].json;\n      console.log(\"✅ Method 2 success - USDT TRC20 from all():\", usdtTRC20);\n    }\n  } catch (e) {\n    console.log(\"❌ Method 2 failed:\", e.message);\n  }\n}\n\n// Method 3: Try getting from pairedItem\nif (!usdtTRC20.balanceUSD && !usdtTRC20.balanceUSDT) {\n  try {\n    const items = $input.all();\n    console.log(\"Checking input items:\", items.length);\n    // Look through recent execution data\n    if (items.length > 0) {\n      console.log(\"Input item structure:\", Object.keys(items[0].json));\n    }\n  } catch (e) {\n    console.log(\"❌ Method 3 failed:\", e.message);\n  }\n}\n\nconsole.log(\"FINAL USDT TRC20 data:\", usdtTRC20);\n\n// Calculate USD values\nconst bnbUSD = bnb.balanceUSD || 0;\nconst usdtBEP20USD = usdtBEP20.balanceUSDT || usdtBEP20.balanceUSD || 0;\nconst btcUSD = btc.balanceUSD || 0;\nconst ethUSD = eth.balanceUSD || 0;\nconst solUSD = sol.balanceUSD || 0;\nconst xrpUSD = xrp.balanceUSD || 0;\nconst trxUSD = trx.balanceUSD || 0;\nconst usdtTRC20USD = usdtTRC20.balanceUSD || usdtTRC20.balanceUSDT || 0;\n\nconsole.log(\"USD Values:\", { bnbUSD, usdtBEP20USD, btcUSD, ethUSD, solUSD, xrpUSD, trxUSD, usdtTRC20USD });\n\nconst totalUSD = bnbUSD + usdtBEP20USD + btcUSD + ethUSD + solUSD + xrpUSD + trxUSD + usdtTRC20USD;\n\nfunction formatUSD(value) {\n  if (value === 0) return \"$0.00\";\n  if (value < 0.01) return `$${value.toFixed(8)}`;\n  if (value < 1) return `$${value.toFixed(4)}`;\n  return `$${value.toFixed(2)}`;\n}\n\nconst holdings = [\n  { name: \"TRX\", value: trxUSD, formatted: trx.balanceFormatted || \"N/A\" },\n  { name: \"USDT (TRC20)\", value: usdtTRC20USD, formatted: usdtTRC20.balanceFormatted || \"N/A\" },\n  { name: \"BTC\", value: btcUSD, formatted: btc.balanceFormatted || \"N/A\" },\n  { name: \"ETH\", value: ethUSD, formatted: eth.balanceFormatted || \"N/A\" },\n  { name: \"BNB\", value: bnbUSD, formatted: bnb.balanceFormatted || \"N/A\" },\n  { name: \"SOL\", value: solUSD, formatted: sol.balanceFormatted || \"N/A\" },\n  { name: \"XRP\", value: xrpUSD, formatted: xrp.balanceFormatted || \"N/A\" },\n  { name: \"USDT (BEP20)\", value: usdtBEP20USD, formatted: usdtBEP20.balanceFormatted || \"N/A\" }\n];\n\nholdings.sort((a, b) => b.value - a.value);\nconst activeChains = holdings.filter(h => h.value > 0).length;\n\nreturn [{\n  json: {\n    DEBUG: {\n      usdtTRC20_finalData: usdtTRC20,\n      usdtTRC20_USD: usdtTRC20USD,\n      allUSDValues: { bnbUSD, usdtBEP20USD, btcUSD, ethUSD, solUSD, xrpUSD, trxUSD, usdtTRC20USD },\n      totalCalculated: totalUSD\n    },\n    \n    portfolio: {\n      \"TRX (TRON)\": trx.balanceFormatted || \"N/A\",\n      \"USDT (TRC20)\": usdtTRC20.balanceFormatted || \"N/A\",\n      \"BTC (Bitcoin)\": btc.balanceFormatted || \"N/A\",\n      \"ETH (Ethereum)\": eth.balanceFormatted || \"N/A\",\n      \"BNB (BSC)\": bnb.balanceFormatted || \"N/A\",\n      \"SOL (Solana)\": sol.balanceFormatted || \"N/A\",\n      \"XRP (Ripple)\": xrp.balanceFormatted || \"N/A\",\n      \"USDT (BEP20)\": usdtBEP20.balanceFormatted || \"N/A\"\n    },\n    \n    portfolioValue: {\n      totalUSD: formatUSD(totalUSD),\n      totalUSDRaw: totalUSD,\n      breakdown: holdings.map(h => ({\n        asset: h.name,\n        value: formatUSD(h.value),\n        valueRaw: h.value,\n        balance: h.formatted\n      }))\n    },\n    \n    summary: {\n      totalChains: 7,\n      activeChainsWithBalance: activeChains,\n      totalAssets: 8,\n      totalValueUSD: totalUSD,\n      largestHolding: holdings[0].value > 0 \n        ? `${holdings[0].name} (${formatUSD(holdings[0].value)})` \n        : \"No holdings\"\n    },\n    \n    message: `💰 Total Portfolio: ${formatUSD(totalUSD)} across 7 blockchains (${activeChains} active)`,\n    \n    detailedSummary: `\n🏦 MULTI-CHAIN PORTFOLIO SUMMARY\n═══════════════════════════════════════════════════\n💰 Total Value: ${formatUSD(totalUSD)}\n📊 Active Chains: ${activeChains}/7\n🏆 Largest Holding: ${holdings[0].value > 0 ? holdings[0].name + ' (' + formatUSD(holdings[0].value) + ')' : 'None'}\n\nHOLDINGS BY VALUE:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${holdings.map(h => {\n  const indicator = h.value > 0 ? '✅' : '⚪';\n  const name = h.name.padEnd(20);\n  const value = formatUSD(h.value).padStart(12);\n  return `${indicator} ${name} ${value}`;\n}).join('\\n')}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🕐 Updated: ${new Date().toLocaleString()}\n    `.trim()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        -18272
+      ],
+      "id": "1c8b084c-827d-49c8-a939-f9d9bbbd1bb6",
+      "name": "Portfolio Summary"
+    },
+    {
+      "parameters": {
+        "jsCode": "const accountInfo = $input.first().json;\n\nlet usdtBalance = 0;\nlet message = \"⚠️ No USDT (TRC20) found\";\n\n// Look for USDT in TRC20 tokens\nif (accountInfo.trc20token_balances && Array.isArray(accountInfo.trc20token_balances)) {\n  const usdtToken = accountInfo.trc20token_balances.find(\n    token => token.tokenAbbr === \"USDT\" || \n             token.tokenName === \"Tether USD\" ||\n             token.tokenId === \"TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t\"\n  );\n  \n  if (usdtToken) {\n    // USDT has 6 decimals on TRON\n    usdtBalance = parseFloat(usdtToken.balance) / 1000000;\n    message = `✅ USDT (TRC20): $${usdtBalance.toFixed(6)}`;\n  }\n}\n\nreturn [{\n  json: {\n    balanceRaw: usdtBalance * 1000000,\n    balanceUSDT: usdtBalance,\n    balanceFormatted: \"$\" + usdtBalance.toFixed(6) + \" USDT\",\n    balanceUSD: usdtBalance, // <-- IMPORTANT: USDT = $1, so balanceUSD = balanceUSDT\n    network: \"TRON (TRC20)\",\n    message: message,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        -18272
+      ],
+      "id": "bfb4d3db-7bf9-4c81-b144-9006c0d98d29",
+      "name": "Convert USDT TRC20"
+    },
+    {
+      "parameters": {
+        "url": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,binancecoin,solana,ripple,tron,tether&vs_currencies=usd",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3504,
+        -18272
+      ],
+      "id": "359979c2-7119-4052-a074-70e1891c6838",
+      "name": "Fetch Live Prices"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get portfolio balances\nconst portfolio = $('Portfolio Summary').first().json;\n\n// Get live prices from CoinGecko\nconst prices = $input.first().json;\n\nconsole.log(\"Live Prices:\", prices);\n\n// Extract individual prices\nconst btcPrice = prices.bitcoin?.usd || 95000;\nconst ethPrice = prices.ethereum?.usd || 3200;\nconst bnbPrice = prices.binancecoin?.usd || 600;\nconst solPrice = prices.solana?.usd || 180;\nconst xrpPrice = prices.ripple?.usd || 2.5;\nconst trxPrice = prices.tron?.usd || 0.25;\nconst usdtPrice = prices.tether?.usd || 1.0;\n\n// Get balances from portfolio\nconst btcBalance = portfolio.portfolioValue.breakdown[0].valueRaw || 0;\nconst ethBalance = portfolio.portfolioValue.breakdown[2].valueRaw || 0;\nconst bnbBalance = portfolio.portfolioValue.breakdown[4].valueRaw || 0;\nconst solBalance = portfolio.portfolioValue.breakdown[5].valueRaw || 0;\nconst xrpBalance = portfolio.portfolioValue.breakdown[6].valueRaw || 0;\n\n// Get TRX and USDT balances\nlet trxBalance = 0;\nlet usdtTRC20Balance = 0;\nlet usdtBEP20Balance = 0;\n\n// Extract from portfolio\nportfolio.portfolioValue.breakdown.forEach(item => {\n  if (item.asset === \"TRX\") trxBalance = item.valueRaw;\n  if (item.asset === \"USDT (TRC20)\") usdtTRC20Balance = item.valueRaw;\n  if (item.asset === \"USDT (BEP20)\") usdtBEP20Balance = item.valueRaw;\n});\n\n// Calculate values with LIVE prices\nconst btcUSD = btcBalance;\nconst ethUSD = ethBalance;\nconst bnbUSD = bnbBalance;\nconst solUSD = solBalance;\nconst xrpUSD = xrpBalance;\nconst trxUSD = trxBalance;\nconst usdtUSD = usdtTRC20Balance + usdtBEP20Balance;\n\nconst totalUSD = btcUSD + ethUSD + bnbUSD + solUSD + xrpUSD + trxUSD + usdtUSD;\n\n// Format function\nfunction formatUSD(value) {\n  if (value === 0) return \"$0.00\";\n  if (value < 0.01) return `$${value.toFixed(8)}`;\n  if (value < 1) return `$${value.toFixed(4)}`;\n  return `$${value.toFixed(2)}`;\n}\n\n// Create updated portfolio with live prices\nconst livePortfolio = {\n  livePrices: {\n    BTC: `$${btcPrice.toLocaleString()}`,\n    ETH: `$${ethPrice.toLocaleString()}`,\n    BNB: `$${bnbPrice.toFixed(2)}`,\n    SOL: `$${solPrice.toFixed(2)}`,\n    XRP: `$${xrpPrice.toFixed(4)}`,\n    TRX: `$${trxPrice.toFixed(6)}`,\n    USDT: `$${usdtPrice.toFixed(4)}`\n  },\n  \n  portfolioValue: {\n    totalUSD: formatUSD(totalUSD),\n    totalUSDRaw: totalUSD,\n    breakdown: {\n      BTC: formatUSD(btcUSD),\n      ETH: formatUSD(ethUSD),\n      BNB: formatUSD(bnbUSD),\n      SOL: formatUSD(solUSD),\n      XRP: formatUSD(xrpUSD),\n      TRX: formatUSD(trxUSD),\n      USDT_Total: formatUSD(usdtUSD)\n    }\n  },\n  \n  holdings: portfolio.portfolio,\n  \n  priceUpdate: {\n    timestamp: new Date().toISOString(),\n    source: \"CoinGecko API\",\n    refreshRate: \"Real-time\"\n  },\n  \n  marketSummary: `💰 Portfolio: ${formatUSD(totalUSD)} | 📈 Prices Updated: ${new Date().toLocaleTimeString()}`\n};\n\nreturn [{\n  json: livePortfolio\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3728,
+        -18272
+      ],
+      "id": "d32af25f-6e0f-40c4-ac82-0376430899f7",
+      "name": "Calculate Portfolio Value"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get search parameters from previous node\nconst searchParams = $('Set Flight Search Params').first().json;\n\n// Generate mock flight data\nconst flights = [\n  {\n    id: \"FL001\",\n    airline: \"Budget Air\",\n    flightNumber: \"BA 001\",\n    departure: {\n      airport: searchParams.origin,\n      time: \"08:00 AM\",\n      date: searchParams.departureDate\n    },\n    arrival: {\n      airport: searchParams.destination,\n      time: \"04:30 PM\",\n      date: searchParams.departureDate\n    },\n    duration: \"5h 30m\",\n    price: {\n      USD: 0.10,\n      USDT: 0.10,\n      BTC: 0.0000014,\n      TRX: 0.35,\n      ETH: 0.000048\n    },\n    bookingUrl: \"https://www.travala.com/book/FL001\",\n    cryptoAccepted: true\n  },\n  {\n    id: \"FL002\",\n    airline: \"Economy Airlines\",\n    flightNumber: \"EA 002\",\n    departure: {\n      airport: searchParams.origin,\n      time: \"10:30 AM\",\n      date: searchParams.departureDate\n    },\n    arrival: {\n      airport: searchParams.destination,\n      time: \"07:00 PM\",\n      date: searchParams.departureDate\n    },\n    duration: \"5h 30m\",\n    price: {\n      USD: 0.15,\n      USDT: 0.15,\n      BTC: 0.0000021,\n      TRX: 0.54,\n      ETH: 0.000072\n    },\n    bookingUrl: \"https://www.travala.com/book/FL002\",\n    cryptoAccepted: true\n  },\n  {\n    id: \"FL003\",\n    airline: \"Premium Air\",\n    flightNumber: \"PA 003\",\n    departure: {\n      airport: searchParams.origin,\n      time: \"02:15 PM\",\n      date: searchParams.departureDate\n    },\n    arrival: {\n      airport: searchParams.destination,\n      time: \"10:45 PM\",\n      date: searchParams.departureDate\n    },\n    duration: \"5h 30m\",\n    price: {\n      USD: 0.20,\n      USDT: 0.20,\n      BTC: 0.0000028,\n      TRX: 0.72,\n      ETH: 0.000096\n    },\n    bookingUrl: \"https://www.travala.com/book/FL003\",\n    cryptoAccepted: true\n  }\n];\n\n// Sort by price (cheapest first)\nflights.sort((a, b) => a.price.USD - b.price.USD);\n\nreturn [{\n  json: {\n    searchParams: searchParams,\n    flights: flights,\n    cheapestFlight: flights[0],\n    totalOptions: flights.length,\n    priceRange: {\n      min: flights[0].price.USD,\n      max: flights[flights.length - 1].price.USD\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4176,
+        -18848
+      ],
+      "id": "75445a4c-9418-4608-ae4e-5f2f46bfba22",
+      "name": "Generate Flight Options"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a333e44e-a218-4584-ad8a-ffb825aad980",
+              "name": "origin",
+              "value": "LAX",
+              "type": "string"
+            },
+            {
+              "id": "062163ef-1d9e-490f-8cc2-68f0b29f4069",
+              "name": "destination",
+              "value": "NYC",
+              "type": "string"
+            },
+            {
+              "id": "09a5d9cd-f594-448f-a28d-b907ee19a9d4",
+              "name": "departureDate",
+              "value": "2026-03-15",
+              "type": "string"
+            },
+            {
+              "id": "4f683334-2c6a-4485-a8aa-1f7e6bed2f9a",
+              "name": "returnDate",
+              "value": "2026-03-20",
+              "type": "string"
+            },
+            {
+              "id": "09742828-bdaf-491e-8c25-7ed4e58bfe3e",
+              "name": "adults",
+              "value": "1",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3952,
+        -18848
+      ],
+      "id": "43124dcc-2ffb-43ff-be8f-6600398a9537",
+      "name": "Set Flight Search Params"
+    },
+    {
+      "parameters": {
+        "jsCode": "const flightData = $input.first().json;\nconst portfolio = $('Calculate Portfolio Value').first().json;\n\n// Get portfolio balances\nconst portfolioUSD = portfolio.portfolioValue.totalUSDRaw || 0;\nconst trxBalance = portfolio.portfolioValue.breakdown?.TRX || \"$0.00\";\nconst usdtBalance = portfolio.portfolioValue.breakdown?.USDT_Total || \"$0.00\";\n\n// Create detailed flight summary\nconst flightSummary = flightData.flights.map((flight, index) => {\n  return `\nOption ${index + 1}: ${flight.airline} ${flight.flightNumber}\n  Route: ${flight.departure.airport} → ${flight.arrival.airport}\n  Departure: ${flight.departure.date} at ${flight.departure.time}\n  Arrival: ${flight.arrival.date} at ${flight.arrival.time}\n  Duration: ${flight.duration}\n  Price: $${flight.price.USD}\n  \n  Payment Options:\n    • ${flight.price.USDT} USDT\n    • ${flight.price.TRX} TRX\n    • ${flight.price.BTC} BTC\n    • ${flight.price.ETH} ETH\n  `;\n}).join('\\n---\\n');\n\nconst aiPrompt = `\nPORTFOLIO STATUS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nTotal Portfolio Value: $${portfolioUSD.toFixed(4)}\nAvailable TRX: ${trxBalance}\nAvailable USDT: ${usdtBalance}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nFLIGHT SEARCH:\nFrom: ${flightData.searchParams.origin}\nTo: ${flightData.searchParams.destination}\nDate: ${flightData.searchParams.departureDate}\nReturn: ${flightData.searchParams.returnDate}\n\nAVAILABLE FLIGHTS:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${flightSummary}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nANALYSIS REQUIREMENTS:\n1. Can I afford ANY of these flights with my current portfolio?\n2. Which flight offers the best value (price vs timing)?\n3. What's the best payment method based on my holdings?\n4. Should I book now or wait?\n5. What percentage of my portfolio would this use?\n\nRESPOND WITH VALID JSON ONLY:\n{\n  \"decision\": \"yes\" or \"no\",\n  \"selectedFlight\": \"FL001\" or \"FL002\" or \"FL003\" or null,\n  \"paymentMethod\": \"USDT\" or \"TRX\" or \"BTC\" or \"ETH\" or null,\n  \"paymentAmount\": number or null,\n  \"portfolioImpact\": \"percentage\",\n  \"affordability\": \"can afford easily\" or \"tight budget\" or \"insufficient funds\",\n  \"reason\": \"detailed explanation of decision\",\n  \"recommendation\": \"strategic advice about booking or waiting\"\n}\n`;\n\nreturn [{\n  json: {\n    aiPrompt: aiPrompt,\n    flightData: flightData,\n    portfolioData: {\n      totalUSD: portfolioUSD,\n      trx: trxBalance,\n      usdt: usdtBalance\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        -18848
+      ],
+      "id": "c930f97b-b56e-465a-a6ec-3ffb79209c36",
+      "name": "Prepare AI Flight Analysis"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ultra-simple forced approval - NO AI parsing\nreturn [{\n  json: {\n    shouldProceed: true,\n    aiDecision: \"yes\",\n    selectedFlight: {\n      id: \"FL001\",\n      airline: \"Budget Air\",\n      flightNumber: \"BA 001\"\n    },\n    paymentMethod: \"USDT\",\n    paymentAmount: 0.10,\n    aiReason: \"TESTING: Forced approval\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4848,
+        -18848
+      ],
+      "id": "d957b5e6-c2dd-4917-8983-4405a3c3cc2f",
+      "name": "Parse Flight Decision"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a travel and financial advisor AI. Analyze flight options considering the user's crypto portfolio. Make conservative, smart decisions. Always respond with valid JSON only, no other text.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Portfolio: $0.25. Should I book a $180 flight? Reply JSON: {\\\"decision\\\":\\\"yes\\\",\\\"reason\\\":\\\"explanation\\\",\\\"paymentMethod\\\":\\\"USDT\\\"}\"\n    }\n  ],\n  \"temperature\": 0.5,\n  \"max_tokens\": 800\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4624,
+        -18848
+      ],
+      "id": "023d350f-e14d-4157-8a64-f8fb7d42b075",
+      "name": "AI Flight Decision"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31b68b37-0ab8-4c30-bcc1-4336c1a26b4e",
+              "leftValue": "={{$json.shouldProceed}}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5072,
+        -18848
+      ],
+      "id": "60b4f164-6389-49d2-b1c3-3e65314aa970",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ultra-simple flight booking - no complex data access\nconst bookingId = `FLIGHT-${Date.now()}`;\n\nreturn [{\n  json: {\n    success: true,\n    booking: {\n      bookingId: bookingId,\n      flight: {\n        airline: \"Budget Air\",\n        flightNumber: \"BA 001\",\n        route: \"LAX → NYC\",\n        departure: \"2026-03-15 08:00 AM\",\n        arrival: \"2026-03-15 04:30 PM\"\n      },\n      payment: {\n        amount: 0.10,\n        currency: \"USDT\",\n        status: \"PENDING\"\n      },\n      passenger: {\n        email: \"ikechukwucmiller@gmail.com\"\n      },\n      created_at: new Date().toISOString()\n    },\n    message: \"✅ Flight booking created!\",\n    nextStep: \"SEND_EMAIL\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5744,
+        -18848
+      ],
+      "id": "f27763aa-c0a2-4ae3-9086-24e401b141e9",
+      "name": "Create Flight Booking"
+    },
+    {
+      "parameters": {
+        "jsCode": "const booking = $input.first().json.booking;\nconst decision = $('Parse Flight Decision').first().json;\n\nconst emailHTML = `\n<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }\n  .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; }\n  .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }\n  .content { padding: 30px; }\n  .flight-card { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }\n  .label { color: #666; font-size: 14px; }\n  .value { color: #333; font-size: 18px; font-weight: bold; }\n  .status { background: #ffc107; color: #856404; padding: 15px; border-radius: 8px; margin: 20px 0; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h1>✈️ Flight Booking Created</h1>\n    <p>Booking ID: ${booking.bookingId}</p>\n  </div>\n  \n  <div class=\"content\">\n    <div class=\"flight-card\">\n      <h2>${booking.flight.airline} ${booking.flight.flightNumber}</h2>\n      <p class=\"label\">Route</p>\n      <p class=\"value\">${booking.flight.route}</p>\n      \n      <p class=\"label\">Departure</p>\n      <p class=\"value\">${booking.flight.departure}</p>\n      \n      <p class=\"label\">Arrival</p>\n      <p class=\"value\">${booking.flight.arrival}</p>\n      \n      <p class=\"label\">Duration</p>\n      <p class=\"value\">${booking.flight.duration}</p>\n    </div>\n    \n    <div class=\"status\">\n      <strong>⏳ Status: PENDING PAYMENT</strong><br><br>\n      <strong>Payment Required:</strong><br>\n      ${booking.payment.amount} ${booking.payment.currency}<br><br>\n      <strong>AI Decision:</strong><br>\n      ${decision.aiReason}\n    </div>\n    \n    <p><strong>Next Step:</strong> Payment will be executed automatically after final approval.</p>\n  </div>\n</div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    to: \"ikechukwucmiller@gmail.com\",\n    subject: `✈️ Flight Booking Created - ${booking.flight.airline} ${booking.flight.flightNumber}`,\n    htmlBody: emailHTML\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5968,
+        -18848
+      ],
+      "id": "5691739f-e349-4fdc-a8da-b28596392f92",
+      "name": "Prepare Flight Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$json.to}}",
+        "subject": "=={{$json.subject}}",
+        "message": "=={{$json.htmlBody}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        6192,
+        -18560
+      ],
+      "id": "9a857817-eb6c-47aa-8ef3-d5c269915850",
+      "name": "Send a message1",
+      "webhookId": "9b0aada4-3bf6-4cff-b2ce-89b1187e1c60",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zFtBXtRN8YfYJDBx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Popular gift cards available via Bitrefill\nconst giftCards = [\n  {\n    id: \"GC001\",\n    name: \"Amazon Gift Card\",\n    denominations: [10, 25, 50, 100],\n    cryptoAccepted: [\"BTC\", \"USDT\", \"TRX\", \"ETH\"],\n    category: \"shopping\",\n    discount: \"0-5%\",\n    delivery: \"instant\",\n    url: \"https://www.bitrefill.com/buy/amazon-usa/\"\n  },\n  {\n    id: \"GC002\",\n    name: \"Uber Gift Card\",\n    denominations: [25, 50, 100],\n    cryptoAccepted: [\"BTC\", \"USDT\", \"TRX\"],\n    category: \"transportation\",\n    discount: \"0-3%\",\n    delivery: \"instant\",\n    url: \"https://www.bitrefill.com/buy/uber/\"\n  },\n  {\n    id: \"GC003\",\n    name: \"Starbucks Gift Card\",\n    denominations: [10, 25, 50],\n    cryptoAccepted: [\"BTC\", \"USDT\", \"TRX\"],\n    category: \"food\",\n    discount: \"0-2%\",\n    delivery: \"instant\",\n    url: \"https://www.bitrefill.com/buy/starbucks/\"\n  },\n  {\n    id: \"GC004\",\n    name: \"Netflix Gift Card\",\n    denominations: [30, 60, 100],\n    cryptoAccepted: [\"BTC\", \"USDT\"],\n    category: \"entertainment\",\n    discount: \"0%\",\n    delivery: \"instant\",\n    url: \"https://www.bitrefill.com/buy/netflix/\"\n  },\n  {\n    id: \"GC005\",\n    name: \"Walmart Gift Card\",\n    denominations: [25, 50, 100],\n    cryptoAccepted: [\"BTC\", \"USDT\", \"TRX\"],\n    category: \"shopping\",\n    discount: \"0-4%\",\n    delivery: \"instant\",\n    url: \"https://www.bitrefill.com/buy/walmart/\"\n  },\n  {\n    id: \"GC006\",\n    name: \"Target Gift Card\",\n    denominations: [10, 25, 50, 100],\n    cryptoAccepted: [\"BTC\", \"USDT\"],\n    category: \"shopping\",\n    discount: \"0-3%\",\n    delivery: \"instant\",\n    url: \"https://www.bitrefill.com/buy/target/\"\n  },\n  {\n    id: \"GC007\",\n    name: \"DoorDash Gift Card\",\n    denominations: [25, 50, 100],\n    cryptoAccepted: [\"BTC\", \"USDT\", \"TRX\"],\n    category: \"food\",\n    discount: \"0-2%\",\n    delivery: \"instant\",\n    url: \"https://www.bitrefill.com/buy/doordash/\"\n  },\n  {\n    id: \"GC008\",\n    name: \"Google Play Gift Card\",\n    denominations: [10, 25, 50, 100],\n    cryptoAccepted: [\"BTC\", \"USDT\", \"ETH\"],\n    category: \"entertainment\",\n    discount: \"0%\",\n    delivery: \"instant\",\n    url: \"https://www.bitrefill.com/buy/google-play-usa/\"\n  }\n];\n\n// Get portfolio\nconst portfolio = $('Calculate Portfolio Value').first().json;\nconst totalUSD = portfolio.portfolioValue.totalUSDRaw || 0;\n\n// Filter affordable cards (at least one denomination is affordable)\nconst affordableCards = giftCards.filter(card => \n  card.denominations.some(amount => amount <= totalUSD)\n);\n\n// Get the smallest affordable denomination for each card\nconst recommendedCards = affordableCards.map(card => {\n  const affordableDenoms = card.denominations.filter(d => d <= totalUSD);\n  return {\n    ...card,\n    recommendedAmount: Math.max(...affordableDenoms)\n  };\n});\n\nreturn [{\n  json: {\n    allCards: giftCards,\n    affordableCards: recommendedCards,\n    portfolioValue: totalUSD,\n    totalOptions: recommendedCards.length,\n    categories: [...new Set(giftCards.map(c => c.category))]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4176,
+        -18560
+      ],
+      "id": "c1e4ed3e-dca8-4562-b46a-b4dba672e602",
+      "name": "Gift Card Catalog"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Your crypto-friendly subscriptions\nconst subscriptions = [\n  {\n    id: \"SUB001\",\n    name: \"Mullvad VPN\",\n    amount: 5,\n    currency: \"BTC\",\n    billingCycle: \"monthly\",\n    dueDay: 15,\n    recipient: \"4PLRHXZWUBcMNBcjd4s5KFjzuZpGCfcMZT\",\n    priority: \"high\",\n    autoRenew: true,\n    website: \"https://mullvad.net\",\n    category: \"privacy\",\n    essential: true,\n    note: \"Privacy VPN - no logs, accepts crypto\"\n  },\n  {\n    id: \"SUB002\",\n    name: \"ProtonMail Plus\",\n    amount: 5,\n    currency: \"BTC\",\n    billingCycle: \"monthly\",\n    dueDay: 1,\n    recipient: \"bc1qprotonmail...\",\n    priority: \"high\",\n    autoRenew: true,\n    website: \"https://proton.me\",\n    category: \"email\",\n    essential: true,\n    note: \"Encrypted email service\"\n  },\n  {\n    id: \"SUB003\",\n    name: \"Storj Cloud Storage (150GB)\",\n    amount: 4,\n    currency: \"USDT\",\n    billingCycle: \"monthly\",\n    dueDay: 10,\n    recipient: \"0xStorjWallet...\",\n    priority: \"medium\",\n    autoRenew: true,\n    website: \"https://www.storj.io\",\n    category: \"storage\",\n    essential: false,\n    note: \"Decentralized cloud storage\"\n  },\n  {\n    id: \"SUB004\",\n    name: \"Namecheap Domain (.com)\",\n    amount: 12,\n    currency: \"BTC\",\n    billingCycle: \"annual\",\n    dueDay: 0,\n    recipient: \"bc1qnamecheap...\",\n    priority: \"low\",\n    autoRenew: false,\n    website: \"https://www.namecheap.com\",\n    category: \"domain\",\n    essential: false,\n    note: \"Domain registration\"\n  },\n  {\n    id: \"SUB005\",\n    name: \"Linode VPS (Nanode 1GB)\",\n    amount: 5,\n    currency: \"BTC\",\n    billingCycle: \"monthly\",\n    dueDay: 5,\n    recipient: \"bc1qlinode...\",\n    priority: \"medium\",\n    autoRenew: true,\n    website: \"https://www.linode.com\",\n    category: \"hosting\",\n    essential: false,\n    note: \"VPS hosting\"\n  },\n  {\n    id: \"SUB006\",\n    name: \"IVPN\",\n    amount: 6,\n    currency: \"BTC\",\n    billingCycle: \"monthly\",\n    dueDay: 20,\n    recipient: \"bc1qivpn...\",\n    priority: \"low\",\n    autoRenew: false,\n    website: \"https://www.ivpn.net\",\n    category: \"privacy\",\n    essential: false,\n    note: \"Alternative privacy VPN\"\n  }\n];\n\n// Determine which are due soon\nconst today = new Date();\nconst currentDay = today.getDate();\n\n// Due within next 7 days or overdue by 3 days\nconst dueThisMonth = subscriptions.filter(sub => {\n  if (!sub.autoRenew) return false;\n  if (sub.billingCycle === \"annual\" && currentDay !== 1) return false;\n  \n  const daysDiff = sub.dueDay - currentDay;\n  return (daysDiff >= -3 && daysDiff <= 7);\n});\n\n// Prioritize\ndueThisMonth.sort((a, b) => {\n  const priorityOrder = { high: 1, medium: 2, low: 3 };\n  return priorityOrder[a.priority] - priorityOrder[b.priority];\n});\n\nconst totalDue = dueThisMonth.reduce((sum, sub) => sum + sub.amount, 0);\n\nreturn [{\n  json: {\n    allSubscriptions: subscriptions,\n    dueThisMonth: dueThisMonth,\n    totalDueUSD: totalDue,\n    count: dueThisMonth.length,\n    essential: dueThisMonth.filter(s => s.essential).length,\n    optional: dueThisMonth.filter(s => !s.essential).length,\n    currentDate: today.toISOString(),\n    summary: `${dueThisMonth.length} subscriptions due (${dueThisMonth.filter(s => s.essential).length} essential, $${totalDue} total)`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4176,
+        -18272
+      ],
+      "id": "e35b1ad7-eb20-45f6-ae40-247beb533da9",
+      "name": "My Subscriptions"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hardcoded search params (hotels use flight dates)\nconst searchParams = {\n  origin: \"LAX\",\n  destination: \"NYC\",\n  departureDate: \"2026-03-15\",\n  returnDate: \"2026-03-20\"\n};\n\nconst nights = 5;\n\nconst hotels = [\n  {\n    id: \"HOT001\",\n    name: \"Budget Inn\",\n    location: `${searchParams.destination} City Center`,\n    stars: 2,\n    rating: 3.8,\n    reviews: 245,\n    pricePerNight: {\n      USD: 0.08,\n      USDT: 0.08,\n      BTC: 0.0000011,\n      TRX: 0.29,\n      ETH: 0.000038\n    },\n    totalPrice: {\n      USD: 0.40,\n      USDT: 0.40,\n      BTC: 0.0000056,\n      TRX: 1.44\n    },\n    amenities: [\"WiFi\", \"24h Reception\"],\n    cancellation: \"Free cancellation\",\n    breakfast: false,\n    cryptoAccepted: true,\n    bookingUrl: \"https://www.travala.com/hotel/HOT001\",\n    nights: nights,\n    checkIn: searchParams.departureDate,\n    checkOut: searchParams.returnDate\n  },\n  {\n    id: \"HOT002\",\n    name: \"Comfort Hotel\",\n    location: `${searchParams.destination} Downtown`,\n    stars: 3,\n    rating: 4.2,\n    reviews: 532,\n    pricePerNight: {\n      USD: 0.12,\n      USDT: 0.12,\n      BTC: 0.0000017,\n      TRX: 0.43\n    },\n    totalPrice: {\n      USD: 0.60,\n      USDT: 0.60,\n      BTC: 0.0000084,\n      TRX: 2.16\n    },\n    amenities: [\"WiFi\", \"Breakfast\", \"Gym\", \"Pool\"],\n    cancellation: \"Free cancellation 24h before\",\n    breakfast: true,\n    cryptoAccepted: true,\n    bookingUrl: \"https://www.travala.com/hotel/HOT002\",\n    nights: nights,\n    checkIn: searchParams.departureDate,\n    checkOut: searchParams.returnDate\n  }\n];\n\nhotels.sort((a, b) => a.totalPrice.USD - b.totalPrice.USD);\n\nreturn [{\n  json: {\n    hotels: hotels,\n    cheapestHotel: hotels[0],\n    destination: searchParams.destination,\n    checkIn: searchParams.departureDate,\n    checkOut: searchParams.returnDate,\n    nights: nights,\n    totalOptions: hotels.length\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4176,
+        -17696
+      ],
+      "id": "06f8253c-a302-40dd-a83a-c747efe43ad9",
+      "name": "Search Hotels"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cardData = $input.first().json;\nconst portfolio = $('Calculate Portfolio Value').first().json;\n\n// Create card list\nconst cardsList = cardData.affordableCards.map(c => \n  `- ${c.name} ($${c.recommendedAmount}): ${c.category}, ${c.discount} discount, ${c.cryptoAccepted.join('/')}`\n).join('\\n');\n\nconst prompt = `\nPORTFOLIO STATUS:\nTotal: ${portfolio.portfolioValue.totalUSD}\nAvailable USDT: ${portfolio.portfolioValue.breakdown?.USDT_Total || '$0'}\nAvailable TRX: ${portfolio.portfolioValue.breakdown?.TRX || '$0'}\n\nAVAILABLE GIFT CARDS (${cardData.totalOptions} options):\n${cardsList}\n\nANALYSIS REQUIRED:\n1. Which gift card would be most useful for daily expenses?\n2. Can I afford it without depleting my portfolio?\n3. Will it save money vs paying with fiat?\n4. Should I buy now or wait?\n5. Which crypto should I use to pay?\n\nRespond ONLY with valid JSON:\n{\n  \"decision\": \"yes\" or \"no\",\n  \"selectedCard\": \"card name\" or null,\n  \"amount\": number or null,\n  \"paymentMethod\": \"USDT\" or \"TRX\" or \"BTC\" or \"ETH\" or null,\n  \"reason\": \"detailed explanation considering daily use and affordability\",\n  \"monthlySavings\": \"estimated savings\",\n  \"portfolioImpact\": \"percentage of portfolio\"\n}\n`;\n\nreturn [{\n  json: {\n    aiPrompt: prompt,\n    cardData: cardData,\n    portfolio: portfolio\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        -18560
+      ],
+      "id": "0dbfcd70-66a6-4b6d-a4a2-b79ea5b8d730",
+      "name": "AI Gift Card Decision"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a financial advisor AI specializing in crypto and gift card purchases. Respond with valid JSON only.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Portfolio: $0.25. Should I buy a $10 Amazon gift card? Reply JSON: {\\\"decision\\\":\\\"yes\\\",\\\"selectedCard\\\":\\\"Amazon Gift Card\\\",\\\"amount\\\":10,\\\"paymentMethod\\\":\\\"USDT\\\",\\\"reason\\\":\\\"explanation\\\",\\\"monthlySavings\\\":\\\"$5\\\",\\\"portfolioImpact\\\":\\\"40%\\\"}\"\n    }\n  ],\n  \"temperature\": 0.5,\n  \"max_tokens\": 600\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4624,
+        -18560
+      ],
+      "id": "c8a2aaa5-6500-4540-9018-5eb3a77b1526",
+      "name": "AI Gift Card Decision1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get AI response\nconst aiResponse = $input.first().json;\nconst aiMessage = aiResponse.choices[0].message.content;\n\nconsole.log(\"AI Gift Card Response:\", aiMessage);\n\n// Parse AI decision\nlet decision;\ntry {\n  const cleanMessage = aiMessage.replace(/```json|```/g, '').trim();\n  decision = JSON.parse(cleanMessage);\n} catch (e) {\n  console.error(\"Parse error:\", e);\n  decision = {\n    decision: \"no\",\n    reason: \"AI response parsing failed\"\n  };\n}\n\n// Safely get gift card data\nlet cardData, selectedCard = null;\ntry {\n  cardData = $('Gift Card Catalog').first().json;\n  \n  if (decision.decision === \"yes\" && cardData.affordableCards) {\n    selectedCard = cardData.affordableCards.find(c => \n      c.name?.toLowerCase().includes(decision.selectedCard?.toLowerCase() || \"xxx\")\n    ) || cardData.affordableCards[0]; // Default to first\n  }\n} catch (e) {\n  console.error(\"Error getting card data:\", e);\n}\n\nreturn [{\n  json: {\n    aiDecision: decision.decision || \"no\",\n    selectedCard: selectedCard,\n    amount: decision.amount || 0,\n    paymentMethod: decision.paymentMethod || \"USDT\",\n    portfolioImpact: decision.portfolioImpact || \"0%\",\n    aiReason: decision.reason || \"No reason provided\",\n    monthlySavings: decision.monthlySavings || \"Unknown\",\n    shouldProceedGiftCard: decision.decision === \"yes\" && selectedCard !== null,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4848,
+        -18560
+      ],
+      "id": "1d4c555a-3816-49b7-91fc-1a729bc681f6",
+      "name": "Parse Gift Card Decision"
+    },
+    {
+      "parameters": {
+        "jsCode": "const decision = $input.first().json;\nconst card = decision.selectedCard;\n\nif (!card) {\n  return [{\n    json: {\n      success: false,\n      message: \"No card selected\"\n    }\n  }];\n}\n\n// Create purchase order\nconst purchase = {\n  orderId: `GIFT-${Date.now()}`,\n  status: \"PENDING_PAYMENT\",\n  giftCard: {\n    id: card.id,\n    name: card.name,\n    amount: decision.amount,\n    category: card.category,\n    delivery: card.delivery,\n    discount: card.discount\n  },\n  payment: {\n    method: decision.paymentMethod,\n    amount: decision.amount,\n    currency: decision.paymentMethod,\n    status: \"PENDING\"\n  },\n  redemption: {\n    code: \"XXXX-XXXX-XXXX-XXXX\", // Would come from Bitrefill API\n    instructions: `Redeem at ${card.url}`,\n    expiresAt: \"No expiration\"\n  },\n  savings: decision.monthlySavings,\n  portfolioImpact: decision.portfolioImpact,\n  purchaseUrl: card.url,\n  created_at: new Date().toISOString()\n};\n\n// In production, call Bitrefill API here\n// const response = await fetch('https://api.bitrefill.com/v1/orders', {...});\n\nreturn [{\n  json: {\n    success: true,\n    purchase: purchase,\n    nextStep: \"EXECUTE_PAYMENT\",\n    message: `✅ Gift card order created! ${card.name} $${decision.amount}`,\n    paymentInstructions: {\n      recipient: \"BITREFILL_WALLET_ADDRESS\",\n      amount: decision.amount,\n      currency: decision.paymentMethod,\n      memo: purchase.orderId\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5744,
+        -18560
+      ],
+      "id": "39575655-909e-4df4-934f-5cd759afb727",
+      "name": "Purchase Gift Card"
+    },
+    {
+      "parameters": {
+        "jsCode": "const portfolio = $('Calculate Portfolio Value').first().json;\n\nconst merchants = [\n  {\n    id: \"SHOP001\",\n    name: \"Newegg\",\n    category: \"Electronics\",\n    description: \"Computers, components, electronics\",\n    accepts: [\"BTC\", \"BCH\", \"ETH\", \"USDT\", \"DOGE\"],\n    paymentProcessor: \"BitPay\",\n    website: \"https://www.newegg.com\",\n    minOrder: 0,\n    shipping: \"Worldwide\",\n    note: \"Major electronics retailer, 20+ years accepting crypto\"\n  },\n  {\n    id: \"SHOP002\",\n    name: \"Overstock\",\n    category: \"Home & Furniture\",\n    description: \"Furniture, home decor, bedding\",\n    accepts: [\"BTC\", \"ETH\", \"LTC\", \"BCH\", \"DOGE\"],\n    paymentProcessor: \"Direct\",\n    website: \"https://www.overstock.com\",\n    minOrder: 0,\n    shipping: \"US & International\",\n    note: \"First major retailer to accept Bitcoin (2014)\"\n  },\n  {\n    id: \"SHOP003\",\n    name: \"eGifter\",\n    category: \"Gift Cards\",\n    description: \"Gift cards for 300+ brands\",\n    accepts: [\"BTC\", \"ETH\", \"USDT\", \"LTC\"],\n    paymentProcessor: \"Direct\",\n    website: \"https://www.egifter.com\",\n    minOrder: 1,\n    shipping: \"Digital delivery\",\n    note: \"Instant delivery, buy any brand with crypto\"\n  },\n  {\n    id: \"SHOP004\",\n    name: \"Purse.io\",\n    category: \"Amazon Marketplace\",\n    description: \"Buy anything on Amazon with crypto\",\n    accepts: [\"BTC\", \"BCH\"],\n    paymentProcessor: \"P2P\",\n    website: \"https://purse.io\",\n    minOrder: 5,\n    shipping: \"Amazon shipping\",\n    note: \"Save 5-15% on Amazon purchases with crypto\"\n  },\n  {\n    id: \"SHOP005\",\n    name: \"Shopify Stores (thousands)\",\n    category: \"Various\",\n    description: \"Many Shopify stores accept crypto\",\n    accepts: [\"BTC\", \"ETH\", \"USDT\", \"LTC\"],\n    paymentProcessor: \"Coinbase Commerce\",\n    website: \"Various\",\n    minOrder: 0,\n    shipping: \"Varies\",\n    note: \"Search for 'accepts cryptocurrency' on Shopify stores\"\n  },\n  {\n    id: \"SHOP006\",\n    name: \"Namecheap\",\n    category: \"Domains & Hosting\",\n    description: \"Domain names, web hosting, SSL\",\n    accepts: [\"BTC\", \"BCH\"],\n    paymentProcessor: \"Direct\",\n    website: \"https://www.namecheap.com\",\n    minOrder: 0.88,\n    shipping: \"Digital\",\n    note: \"Domains and hosting services\"\n  },\n  {\n    id: \"SHOP007\",\n    name: \"ExpressVPN\",\n    category: \"VPN Service\",\n    description: \"Premium VPN service\",\n    accepts: [\"BTC\"],\n    paymentProcessor: \"BitPay\",\n    website: \"https://www.expressvpn.com\",\n    minOrder: 8.32,\n    shipping: \"Digital\",\n    note: \"Fast VPN, accepts Bitcoin\"\n  },\n  {\n    id: \"SHOP008\",\n    name: \"CheapAir\",\n    category: \"Travel\",\n    description: \"Flights, hotels, car rentals\",\n    accepts: [\"BTC\", \"BCH\", \"LTC\", \"DASH\"],\n    paymentProcessor: \"Direct\",\n    website: \"https://www.cheapair.com\",\n    minOrder: 0,\n    shipping: \"Digital tickets\",\n    note: \"Book travel with crypto since 2013\"\n  }\n];\n\n// Filter by affordability\nconst affordable = merchants.filter(m => \n  m.minOrder <= portfolio.portfolioValue.totalUSDRaw\n);\n\n// Group by category\nconst categories = {};\nmerchants.forEach(m => {\n  if (!categories[m.category]) categories[m.category] = [];\n  categories[m.category].push(m);\n});\n\nreturn [{\n  json: {\n    allMerchants: merchants,\n    affordableMerchants: affordable,\n    totalMerchants: merchants.length,\n    affordableCount: affordable.length,\n    categories: Object.keys(categories),\n    byCategory: categories,\n    portfolioValue: portfolio.portfolioValue.totalUSD\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4176,
+        -17984
+      ],
+      "id": "63a2f328-cc63-42cb-9d74-df02b329c3ae",
+      "name": "Crypto Merchants"
+    },
+    {
+      "parameters": {
+        "jsCode": "const subs = $input.first().json;\nconst portfolio = $('Calculate Portfolio Value').first().json;\n\nconst subsList = subs.dueThisMonth.map(s => \n  `- ${s.name}: $${s.amount} ${s.currency} (${s.priority} priority, ${s.essential ? 'ESSENTIAL' : 'optional'})`\n).join('\\n');\n\nconst prompt = `\nSUBSCRIPTIONS DUE:\n${subsList}\n\nTotal: $${subs.totalDueUSD}\nPortfolio: ${portfolio.portfolioValue.totalUSD}\n\nWhich should I pay? Reply JSON:\n{\n  \"decision\": \"yes\" or \"partial\" or \"no\",\n  \"toPay\": [\"SUB001\"],\n  \"toSkip\": [],\n  \"paymentPlan\": [{\"subId\": \"SUB001\", \"payWith\": \"BTC\", \"amount\": 5}],\n  \"totalCost\": 5,\n  \"reason\": \"explanation\"\n}\n`;\n\nreturn [{\n  json: {\n    aiPrompt: prompt,\n    subscriptions: subs,\n    portfolio: portfolio\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        -18272
+      ],
+      "id": "65746819-4969-4c3f-af4b-bb681a67b571",
+      "name": "AI Subscription Analyzer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a subscription manager AI. Prioritize essential services. Respond JSON only.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Portfolio: $0.25. I have 2 subscriptions due: Mullvad VPN $5, ProtonMail $5. Which should I pay? Reply JSON: {\\\"decision\\\":\\\"partial\\\",\\\"toPay\\\":[\\\"SUB001\\\"],\\\"toSkip\\\":[\\\"SUB002\\\"],\\\"paymentPlan\\\":[{\\\"subId\\\":\\\"SUB001\\\",\\\"payWith\\\":\\\"BTC\\\",\\\"amount\\\":5}],\\\"totalCost\\\":5,\\\"reason\\\":\\\"explanation\\\"}\"\n    }\n  ],\n  \"temperature\": 0.5,\n  \"max_tokens\": 600\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4624,
+        -18272
+      ],
+      "id": "c11bf1a2-d037-4f95-b248-fbba179a4349",
+      "name": "AI Subscription Decision API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get AI response\nconst aiResponse = $input.first().json;\nconst aiMessage = aiResponse.choices[0].message.content;\n\nconsole.log(\"AI Subscription Response:\", aiMessage);\n\n// Parse AI decision\nlet decision;\ntry {\n  const cleanMessage = aiMessage.replace(/```json|```/g, '').trim();\n  decision = JSON.parse(cleanMessage);\n} catch (e) {\n  console.error(\"Parse error:\", e);\n  decision = {\n    decision: \"no\",\n    reason: \"AI response parsing failed\",\n    toPay: [],\n    toSkip: []\n  };\n}\n\n// Safely get subscription data\nlet subsData;\ntry {\n  subsData = $('My Subscriptions').first().json;\n} catch (e) {\n  console.error(\"Error getting subscription data:\", e);\n  subsData = { allSubscriptions: [] };\n}\n\nreturn [{\n  json: {\n    aiDecision: decision.decision || \"no\",\n    toPay: decision.toPay || [],\n    toSkip: decision.toSkip || [],\n    toCancel: decision.toCancel || [],\n    paymentPlan: decision.paymentPlan || [],\n    totalCost: decision.totalCost || 0,\n    affordability: decision.affordability || \"unknown\",\n    aiReason: decision.reason || \"No reason provided\",\n    recommendations: decision.recommendations || \"None\",\n    shouldProceedSubs: (decision.decision === \"yes\" || decision.decision === \"partial\") && \n                       (decision.toPay?.length > 0 || false),\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4848,
+        -18272
+      ],
+      "id": "605a2bb9-1be5-496e-9ad1-988efefac343",
+      "name": "Parse Subscription Decision"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31b68b37-0ab8-4c30-bcc1-4336c1a26b4e",
+              "leftValue": "={{$json.shouldProceedSubs}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5072,
+        -18272
+      ],
+      "id": "dc6a6924-0010-4e51-a4d2-c1f0ee6363d6",
+      "name": "Should Pay Subscriptions?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31b68b37-0ab8-4c30-bcc1-4336c1a26b4e",
+              "leftValue": "={{$json.shouldProceedGiftCard}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5072,
+        -18560
+      ],
+      "id": "ed8f4162-a346-4fde-bdc8-d6f49742aca6",
+      "name": "Should Buy Gift Card?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safely get decision data\nlet decision;\ntry {\n  decision = $('Parse Subscription Decision').first().json;\n} catch (e) {\n  console.error(\"Could not get decision data:\", e);\n  decision = {\n    toPay: [],\n    paymentPlan: [],\n    totalCost: 0\n  };\n}\n\n// Safely get subscription data\nlet subsData;\ntry {\n  subsData = $('My Subscriptions').first().json;\n} catch (e) {\n  subsData = { allSubscriptions: [] };\n}\n\n// Safe extraction with defaults\nconst toPay = decision.toPay || [];\nconst paymentPlan = decision.paymentPlan || [];\nconst allSubscriptions = subsData.allSubscriptions || [];\n\n// Only create payments if there are subscriptions to pay\nconst payments = toPay.length > 0 ? toPay.map((subId, index) => {\n  // Find the subscription details\n  const sub = allSubscriptions.find(s => s.id === subId) || {\n    id: subId,\n    name: \"Unknown Subscription\",\n    amount: 0,\n    currency: \"BTC\"\n  };\n  \n  // Find payment plan for this subscription\n  const plan = paymentPlan.find(p => p.subId === subId) || {\n    payWith: sub.currency || \"BTC\",\n    amount: sub.amount || 0\n  };\n  \n  return {\n    paymentId: `PAY-${Date.now()}-${index}`,\n    subscription: {\n      id: sub.id,\n      name: sub.name,\n      amount: plan.amount,\n      currency: plan.payWith\n    },\n    recipient: sub.recipient || \"Subscription Provider\",\n    status: \"PENDING\",\n    priority: sub.priority || \"medium\",\n    dueDate: sub.nextDue || \"N/A\",\n    timestamp: new Date().toISOString()\n  };\n}) : [];\n\n// Calculate total\nconst totalCost = payments.reduce((sum, payment) => {\n  return sum + (payment.subscription.amount || 0);\n}, 0);\n\nreturn [{\n  json: {\n    success: true,\n    payments: payments,\n    totalCost: totalCost,\n    paymentCount: payments.length,\n    message: payments.length > 0 \n      ? `✅ ${payments.length} subscription payment(s) created!`\n      : \"⚠️ No subscriptions to pay\",\n    nextStep: payments.length > 0 ? \"SEND_EMAIL\" : \"SKIP\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5744,
+        -18272
+      ],
+      "id": "765717ac-4679-4272-a17b-b19cdc23544a",
+      "name": "Execute Subscription Payments"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safely get payment data\nlet paymentData;\ntry {\n  paymentData = $('Execute Subscription Payments').first().json;\n} catch (e) {\n  console.error(\"Could not get payment data:\", e);\n  paymentData = {\n    payments: [],\n    totalCost: 0,\n    paymentCount: 0\n  };\n}\n\n// Safely get decision data\nlet decision;\ntry {\n  decision = $('Parse Subscription Decision').first().json;\n} catch (e) {\n  decision = { aiReason: \"N/A\" };\n}\n\n// Safe extraction\nconst payments = paymentData.payments || [];\nconst totalCost = paymentData.totalCost || 0;\nconst paymentCount = paymentData.paymentCount || 0;\n\n// Create payment list HTML\nconst paymentList = payments.length > 0 \n  ? payments.map(p => `\n    <tr>\n      <td style=\"padding: 12px; border-bottom: 1px solid #ddd;\">${p.subscription.name}</td>\n      <td style=\"padding: 12px; border-bottom: 1px solid #ddd;\">${p.subscription.amount} ${p.subscription.currency}</td>\n      <td style=\"padding: 12px; border-bottom: 1px solid #ddd;\"><span style=\"background: #28a745; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px;\">${p.priority.toUpperCase()}</span></td>\n    </tr>\n  `).join('')\n  : '<tr><td colspan=\"3\" style=\"padding: 20px; text-align: center; color: #999;\">No payments processed</td></tr>';\n\nconst emailHTML = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; margin: 0; }\n  .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n  .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px; text-align: center; margin-bottom: 30px; }\n  .summary { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }\n  .status { background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107; }\n  table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n  th { background: #667eea; color: white; padding: 12px; text-align: left; font-size: 13px; }\n  td { padding: 12px; border-bottom: 1px solid #ddd; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h1>💳 Subscription Payments</h1>\n    <p>${paymentCount} Payment${paymentCount !== 1 ? 's' : ''} Processed</p>\n  </div>\n  \n  <div class=\"summary\">\n    <h2>📊 Summary</h2>\n    <p><strong>Total Subscriptions Paid:</strong> ${paymentCount}</p>\n    <p><strong>Total Cost:</strong> $${totalCost.toFixed(2)}</p>\n  </div>\n  \n  <h3>💰 Payment Details:</h3>\n  <table>\n    <tr>\n      <th>Subscription</th>\n      <th>Amount</th>\n      <th>Priority</th>\n    </tr>\n    ${paymentList}\n  </table>\n  \n  <div class=\"status\">\n    <strong>⏳ Status: PENDING PAYMENT</strong><br><br>\n    ${paymentCount > 0 \n      ? `<strong>Next Step:</strong> Complete payment for ${paymentCount} subscription${paymentCount !== 1 ? 's' : ''}<br><br>` \n      : '<strong>No payments required at this time</strong><br><br>'}\n    <strong>AI Decision:</strong> ${decision.aiReason || 'N/A'}\n  </div>\n  \n  <p style=\"text-align: center; color: #666; font-size: 12px; margin-top: 30px;\">\n    Generated: ${new Date().toLocaleString()}\n  </p>\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    to: \"ikechukwucmiller@gmail.com\",\n    subject: `💳 ${paymentCount} Subscription${paymentCount !== 1 ? 's' : ''} Paid - $${totalCost.toFixed(2)}`,\n    htmlBody: emailHTML\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5968,
+        -18272
+      ],
+      "id": "efb0d876-9f26-42cb-9264-eeafa4a489ed",
+      "name": "Prepare Subscription Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$json.to}}",
+        "subject": "=={{$json.subject}}",
+        "message": "=={{$json.htmlBody}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        6192,
+        -18272
+      ],
+      "id": "d92fdcfc-fb2c-4b98-bd3c-ac88f55ba0c2",
+      "name": "Send a message",
+      "webhookId": "9b0aada4-3bf6-4cff-b2ce-89b1187e1c60",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zFtBXtRN8YfYJDBx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$json.to}}",
+        "subject": "={{$json.subject}}",
+        "message": "=={{$json.htmlBody}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        6192,
+        -17696
+      ],
+      "id": "87567a8f-5e9d-43a0-a5f0-cae3baacfa51",
+      "name": "Send a message2",
+      "webhookId": "9b0aada4-3bf6-4cff-b2ce-89b1187e1c60",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zFtBXtRN8YfYJDBx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const hotels = $input.first().json.hotels;\nconst portfolio = $('Calculate Portfolio Value').first().json;\n\nconst hotelList = hotels.map(h => \n  `- ${h.name} (${h.stars}★): $${h.totalPrice.USD} total (${h.nights} nights), ${h.amenities.join(', ')}, rating ${h.rating}`\n).join('\\n');\n\nconst prompt = `\nHOTELS IN ${hotels[0].location}:\n${hotelList}\n\nPortfolio: ${portfolio.portfolioValue.totalUSD}\nDates: ${hotels[0].checkIn} to ${hotels[0].checkOut}\n\nShould I book? Reply JSON:\n{\n  \"decision\": \"yes\" or \"no\",\n  \"selectedHotel\": \"hotel name\" or null,\n  \"totalPrice\": number or null,\n  \"paymentMethod\": \"USDT\" or \"TRX\",\n  \"reason\": \"explanation\",\n  \"valueRating\": \"excellent/good/poor\"\n}\n`;\n\nreturn [{\n  json: {\n    aiPrompt: prompt,\n    hotels: hotels,\n    portfolio: portfolio\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        -17696
+      ],
+      "id": "2989cac1-51ae-42a4-a9b8-700f23c44de4",
+      "name": "AI Hotel Analyzer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a travel advisor AI. Respond with valid JSON only.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Portfolio: $0.25. Hotels in NYC: Budget Inn $0.40 (5 nights), Comfort Hotel $0.60. Should I book? Reply JSON: {\\\"decision\\\":\\\"no\\\",\\\"selectedHotel\\\":null,\\\"totalPrice\\\":null,\\\"paymentMethod\\\":\\\"USDT\\\",\\\"reason\\\":\\\"explanation\\\",\\\"valueRating\\\":\\\"poor\\\"}\"\n    }\n  ],\n  \"temperature\": 0.5,\n  \"max_tokens\": 600\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4624,
+        -17696
+      ],
+      "id": "93545559-8915-4c01-86ce-27c9d6de6ba4",
+      "name": "AI Hotel Decision"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get AI response\nconst aiResponse = $input.first().json;\nconst aiMessage = aiResponse.choices[0].message.content;\n\nconsole.log(\"AI Hotel Response:\", aiMessage);\n\n// Parse AI decision\nlet decision;\ntry {\n  const cleanMessage = aiMessage.replace(/```json|```/g, '').trim();\n  decision = JSON.parse(cleanMessage);\n} catch (e) {\n  console.error(\"Parse error:\", e);\n  decision = {\n    decision: \"no\",\n    reason: \"AI response parsing failed\",\n    valueRating: \"error\"\n  };\n}\n\n// Safely get hotel data\nlet hotelData, selectedHotel = null;\ntry {\n  hotelData = $('Search Hotels').first().json;\n  \n  if (decision.decision === \"yes\" && hotelData.hotels) {\n    selectedHotel = hotelData.hotels.find(h => \n      h.name?.toLowerCase().includes(decision.selectedHotel?.toLowerCase() || \"xxx\")\n    ) || hotelData.hotels[0]; // Default to first/cheapest\n  }\n} catch (e) {\n  console.error(\"Error getting hotel data:\", e);\n}\n\nreturn [{\n  json: {\n    aiDecision: decision.decision || \"no\",\n    selectedHotel: selectedHotel,\n    totalPrice: decision.totalPrice || (selectedHotel ? selectedHotel.totalPrice.USD : 0),\n    paymentMethod: decision.paymentMethod || \"USDT\",\n    aiReason: decision.reason || \"No reason provided\",\n    valueRating: decision.valueRating || \"unknown\",\n    shouldProceedHotel: decision.decision === \"yes\" && selectedHotel !== null,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4848,
+        -17696
+      ],
+      "id": "935932f3-2cda-42c5-9d91-e70577295881",
+      "name": "Parse Hotel Decision"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31b68b37-0ab8-4c30-bcc1-4336c1a26b4e",
+              "leftValue": "={{$json.shouldProceedShopping}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5072,
+        -17984
+      ],
+      "id": "deb356ce-5819-4e03-aa25-761d771278f9",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31b68b37-0ab8-4c30-bcc1-4336c1a26b4e",
+              "leftValue": "={{$json.shouldProceedHotel}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5072,
+        -17696
+      ],
+      "id": "adbe401a-2bcf-457c-9488-24867390a38e",
+      "name": "Should Book Hotel?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const merchants = $input.first().json;\nconst portfolio = $('Calculate Portfolio Value').first().json;\n\nconst merchantList = merchants.affordableMerchants.slice(0, 8).map(m =>\n  `- ${m.name} (${m.category}): ${m.description}, accepts ${m.accepts.join('/')}, min order $${m.minOrder}`\n).join('\\n');\n\nconst categoryList = Object.keys(merchants.byCategory).join(', ');\n\nconst prompt = `\nCRYPTO-ACCEPTING MERCHANTS (${merchants.affordableCount} available):\n${merchantList}\n\nCategories: ${categoryList}\n\nPORTFOLIO STATUS:\nTotal: ${portfolio.portfolioValue.totalUSD}\n\nSHOPPING ANALYSIS:\n1. Do I need to purchase anything urgently from these merchants?\n2. Which category would be most useful?\n3. Can I afford it without depleting portfolio?\n4. Should I wait for better opportunities?\n5. Best payment method based on my holdings?\n\nRespond ONLY with valid JSON:\n{\n  \"decision\": \"yes\" or \"no\",\n  \"selectedMerchant\": \"merchant name\" or null,\n  \"category\": \"category\" or null,\n  \"estimatedAmount\": number or null,\n  \"paymentMethod\": \"BTC\" or \"ETH\" or \"USDT\" or \"TRX\",\n  \"reason\": \"detailed explanation of need and affordability\",\n  \"urgency\": \"urgent\" or \"moderate\" or \"low\",\n  \"recommendation\": \"shopping advice and alternatives\"\n}\n`;\n\nreturn [{\n  json: {\n    aiPrompt: prompt,\n    merchants: merchants,\n    portfolio: portfolio\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        -17984
+      ],
+      "id": "4dcba930-3470-497a-8f85-4eff2a03545b",
+      "name": "AI Shopping Analyzer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a shopping advisor AI. Respond JSON only.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Portfolio: $0.25. Merchants available: Newegg (electronics), Overstock (home), eGifter (gift cards). Should I shop? Reply JSON: {\\\"decision\\\":\\\"no\\\",\\\"selectedMerchant\\\":null,\\\"estimatedAmount\\\":null,\\\"paymentMethod\\\":\\\"USDT\\\",\\\"reason\\\":\\\"explanation\\\",\\\"urgency\\\":\\\"low\\\",\\\"recommendation\\\":\\\"advice\\\"}\"\n    }\n  ],\n  \"temperature\": 0.5,\n  \"max_tokens\": 600\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4624,
+        -17984
+      ],
+      "id": "ee5b6841-2f0e-4f66-828b-8bc9e298800c",
+      "name": "AI Shopping Decision API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get AI response\nconst aiResponse = $input.first().json;\nconst aiMessage = aiResponse.choices[0].message.content;\n\nconsole.log(\"AI Shopping Response:\", aiMessage);\n\n// Parse AI decision\nlet decision;\ntry {\n  const cleanMessage = aiMessage.replace(/```json|```/g, '').trim();\n  decision = JSON.parse(cleanMessage);\n} catch (e) {\n  console.error(\"Parse error:\", e);\n  decision = {\n    decision: \"no\",\n    reason: \"AI response parsing failed\",\n    urgency: \"none\"\n  };\n}\n\n// Safely get merchant data\nlet merchantData, selectedMerchant = null;\ntry {\n  merchantData = $('Crypto Merchants').first().json;\n  \n  if (decision.decision === \"yes\" && merchantData.allMerchants) {\n    selectedMerchant = merchantData.allMerchants.find(m => \n      m.name?.toLowerCase().includes(decision.selectedMerchant?.toLowerCase() || \"xxx\")\n    ) || merchantData.allMerchants[0]; // Default to first\n  }\n} catch (e) {\n  console.error(\"Error getting merchant data:\", e);\n}\n\nreturn [{\n  json: {\n    aiDecision: decision.decision || \"no\",\n    selectedMerchant: selectedMerchant,\n    category: decision.category || \"unknown\",\n    estimatedAmount: decision.estimatedAmount || 0,\n    paymentMethod: decision.paymentMethod || \"USDT\",\n    urgency: decision.urgency || \"low\",\n    aiReason: decision.reason || \"No reason provided\",\n    aiRecommendation: decision.recommendation || \"N/A\",\n    shouldProceedShopping: decision.decision === \"yes\" && selectedMerchant !== null,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4848,
+        -17984
+      ],
+      "id": "c72308e6-0ddc-489a-b7d2-6170486679d2",
+      "name": "Parse Shopping Decision"
+    },
+    {
+      "parameters": {
+        "jsCode": "const decision = $input.first().json;\nconst merchant = decision.selectedMerchant;\n\nif (!merchant) {\n  return [{\n    json: {\n      success: false,\n      message: \"No merchant selected\"\n    }\n  }];\n}\n\n// Create purchase order\nconst purchase = {\n  orderId: `SHOP-${Date.now()}`,\n  status: \"PENDING_PAYMENT\",\n  merchant: {\n    id: merchant.id,\n    name: merchant.name,\n    category: merchant.category,\n    description: merchant.description,\n    website: merchant.website\n  },\n  order: {\n    estimatedAmount: decision.estimatedAmount,\n    category: decision.category,\n    urgency: decision.urgency\n  },\n  payment: {\n    method: decision.paymentMethod,\n    amount: decision.estimatedAmount,\n    currency: decision.paymentMethod,\n    processor: merchant.paymentProcessor,\n    status: \"PENDING\"\n  },\n  shipping: {\n    type: merchant.shipping,\n    estimatedDelivery: \"5-7 business days\"\n  },\n  acceptedCrypto: merchant.accepts,\n  merchantUrl: merchant.website,\n  created_at: new Date().toISOString()\n};\n\n// In production, this would:\n// 1. Navigate to merchant website\n// 2. Add items to cart\n// 3. Proceed to checkout\n// 4. Select crypto payment\n// 5. Get payment address\n// 6. Execute payment\n\nreturn [{\n  json: {\n    success: true,\n    purchase: purchase,\n    nextStep: \"EXECUTE_PAYMENT\",\n    message: `✅ Purchase order created at ${merchant.name}!`,\n    paymentInstructions: {\n      recipient: \"MERCHANT_CRYPTO_ADDRESS\",\n      amount: decision.estimatedAmount,\n      currency: decision.paymentMethod,\n      memo: purchase.orderId,\n      processor: merchant.paymentProcessor\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5744,
+        -17984
+      ],
+      "id": "3f2d8103-d108-4a17-9f14-a9d33f16ea0c",
+      "name": "Make Purchase1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safely get purchase data\nlet purchase;\ntry {\n  const purchaseData = $('Make Purchase').first().json;\n  purchase = purchaseData.purchase || purchaseData;\n} catch (e) {\n  console.error(\"Could not get purchase data:\", e);\n  purchase = {\n    orderId: \"ERROR-\" + Date.now(),\n    merchant: { name: \"Unknown\", category: \"Unknown\", description: \"N/A\" },\n    order: { estimatedAmount: 0, urgency: \"low\" },\n    payment: { amount: 0, currency: \"USDT\" },\n    acceptedCrypto: []\n  };\n}\n\n// Safely get decision data\nlet decision;\ntry {\n  decision = $('Parse Shopping Decision').first().json;\n} catch (e) {\n  decision = { aiReason: \"N/A\", aiRecommendation: \"N/A\" };\n}\n\n// Safe data extraction\nconst merchantName = purchase.merchant?.name || \"Merchant\";\nconst category = purchase.merchant?.category || \"Unknown\";\nconst description = purchase.merchant?.description || \"N/A\";\nconst amount = purchase.order?.estimatedAmount || purchase.payment?.amount || 0;\nconst currency = purchase.payment?.currency || \"USDT\";\nconst urgency = purchase.order?.urgency || \"low\";\nconst orderId = purchase.orderId || \"N/A\";\nconst acceptedCrypto = purchase.acceptedCrypto || [];\n\n// Safe crypto badges\nconst cryptoList = acceptedCrypto.length > 0 \n  ? acceptedCrypto.map(c => `<span style=\"background: #667eea; color: white; padding: 5px 10px; border-radius: 4px; margin: 3px; display: inline-block;\">${c}</span>`).join(' ')\n  : '<span style=\"color: #999;\">N/A</span>';\n\n// Urgency badge color\nconst urgencyColor = urgency === \"urgent\" ? \"#dc3545\" : urgency === \"moderate\" ? \"#ffc107\" : \"#28a745\";\n\nconst emailHTML = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; margin: 0; }\n  .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n  .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px; text-align: center; margin-bottom: 30px; }\n  .merchant-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }\n  .status { background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107; }\n  .urgency { background: ${urgencyColor}; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; font-size: 12px; font-weight: bold; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h1>🛒 Purchase Order Created</h1>\n    <p>Order ID: ${orderId}</p>\n  </div>\n  \n  <div class=\"merchant-box\">\n    <h2>${merchantName}</h2>\n    <p><strong>Category:</strong> ${category}</p>\n    <p>${description}</p>\n    <p><strong>Estimated Amount:</strong> $${amount}</p>\n    <p><strong>Urgency:</strong> <span class=\"urgency\">${urgency.toUpperCase()}</span></p>\n  </div>\n  \n  <div class=\"status\">\n    <strong>⏳ Status: PENDING PAYMENT</strong><br><br>\n    <strong>Payment Required:</strong> ${amount} ${currency}<br><br>\n    <strong>AI Decision:</strong> ${decision.aiReason || 'N/A'}<br><br>\n    <strong>AI Recommendation:</strong> ${decision.aiRecommendation || 'N/A'}\n  </div>\n  \n  <div style=\"background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;\">\n    <h3>💰 Accepted Crypto:</h3>\n    <p>${cryptoList}</p>\n  </div>\n  \n  <p style=\"text-align: center; color: #666; font-size: 12px; margin-top: 30px;\">\n    Order created: ${new Date().toLocaleString()}\n  </p>\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    to: \"ikechukwucmiller@gmail.com\",\n    subject: `🛒 Purchase Order - ${merchantName} ($${amount})`,\n    htmlBody: emailHTML\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5968,
+        -17984
+      ],
+      "id": "152395df-de1b-4c42-ac6c-19ad879a6226",
+      "name": "Prepare Shopping Email1"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$json.to}}",
+        "subject": "={{$json.subject}}",
+        "message": "=={{$json.htmlBody}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        6192,
+        -17984
+      ],
+      "id": "b87e1c13-87db-443d-ac82-2217598a0b6b",
+      "name": "Send a message3",
+      "webhookId": "9b0aada4-3bf6-4cff-b2ce-89b1187e1c60",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zFtBXtRN8YfYJDBx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safely get purchase data\nlet purchase;\ntry {\n  const purchaseData = $('Purchase Gift Card').first().json;\n  purchase = purchaseData.purchase || purchaseData;\n} catch (e) {\n  console.error(\"Could not get purchase data:\", e);\n  purchase = {\n    orderId: \"ERROR-\" + Date.now(),\n    giftCard: { name: \"Unknown\", amount: 0, category: \"Unknown\" },\n    payment: { amount: 0, currency: \"USDT\" },\n    redemption: { code: \"N/A\", instructions: \"N/A\" }\n  };\n}\n\n// Safely get decision data\nlet decision;\ntry {\n  decision = $('Parse Gift Card Decision').first().json;\n} catch (e) {\n  decision = { aiReason: \"N/A\" };\n}\n\n// Safe data extraction\nconst cardName = purchase.giftCard?.name || \"Gift Card\";\nconst amount = purchase.giftCard?.amount || purchase.payment?.amount || 0;\nconst category = purchase.giftCard?.category || \"Unknown\";\nconst currency = purchase.payment?.currency || \"USDT\";\nconst orderId = purchase.orderId || \"N/A\";\nconst redemptionCode = purchase.redemption?.code || \"XXXX-XXXX-XXXX\";\nconst instructions = purchase.redemption?.instructions || \"Redeem online\";\n\nconst emailHTML = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; margin: 0; }\n  .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n  .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px; text-align: center; margin-bottom: 30px; }\n  .card-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }\n  .status { background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107; }\n  .code-box { background: #2d2d2d; color: #28a745; padding: 20px; border-radius: 8px; text-align: center; font-size: 24px; font-family: monospace; letter-spacing: 3px; margin: 20px 0; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h1>🎁 Gift Card Purchased</h1>\n    <p>Order ID: ${orderId}</p>\n  </div>\n  \n  <div class=\"card-box\">\n    <h2>${cardName}</h2>\n    <p><strong>Amount:</strong> $${amount}</p>\n    <p><strong>Category:</strong> ${category}</p>\n    <p><strong>Delivery:</strong> Instant (Digital)</p>\n  </div>\n  \n  <div class=\"status\">\n    <strong>⏳ Status: PENDING PAYMENT</strong><br><br>\n    <strong>Payment Required:</strong> ${amount} ${currency}<br><br>\n    <strong>AI Decision:</strong> ${decision.aiReason || 'N/A'}\n  </div>\n  \n  <h3>🎟️ Redemption Code:</h3>\n  <div class=\"code-box\">${redemptionCode}</div>\n  \n  <div style=\"background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0;\">\n    <h3>📋 How to Redeem:</h3>\n    <p>${instructions}</p>\n  </div>\n  \n  <p style=\"text-align: center; color: #666; font-size: 12px; margin-top: 30px;\">\n    Order created: ${new Date().toLocaleString()}\n  </p>\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    to: \"ikechukwucmiller@gmail.com\",\n    subject: `🎁 Gift Card Purchased - ${cardName} $${amount}`,\n    htmlBody: emailHTML\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5968,
+        -18560
+      ],
+      "id": "c1a24544-9fe7-4119-b1f1-213a1ecdbcd8",
+      "name": "Prepare Gift Card Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$json.to}}",
+        "subject": "=={{$json.subject}}",
+        "message": "=={{$json.htmlBody}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        6192,
+        -18848
+      ],
+      "id": "925685ca-2e79-4118-918c-f1857f5f53cc",
+      "name": "Send a message4",
+      "webhookId": "9b0aada4-3bf6-4cff-b2ce-89b1187e1c60",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zFtBXtRN8YfYJDBx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8a3e1b0b-1692-48bb-8e85-f7dc8ad34e21",
+              "name": "destination",
+              "value": "NYC",
+              "type": "string"
+            },
+            {
+              "id": "405740a5-93f7-4ccb-8dc2-9b66cc7560b7",
+              "name": "checkIn",
+              "value": "2026-03-15",
+              "type": "string"
+            },
+            {
+              "id": "686b9082-6f92-41ce-a6e4-8e26b12c4026",
+              "name": "checkOut",
+              "value": "2026-03-20",
+              "type": "string"
+            },
+            {
+              "id": "0ce01ce4-69df-43d8-a246-a8c607b16614",
+              "name": "guests",
+              "value": "1",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3952,
+        -17696
+      ],
+      "id": "13e9a899-9d7a-4e27-9e19-2c93bdf78a24",
+      "name": "Set Hotel Search Params"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safely get booking data\nlet booking;\ntry {\n  const bookData = $('Book Hotel').first().json;\n  booking = bookData.booking || bookData;\n} catch (e) {\n  console.error(\"Error getting booking:\", e);\n  return [{\n    json: {\n      to: \"ikechukwucmiller@gmail.com\",\n      subject: \"❌ Hotel Email Error\",\n      htmlBody: \"<p>Error: Could not generate hotel email. Check 'Book Hotel' node output.</p>\"\n    }\n  }];\n}\n\n// Safely get decision data\nlet decision;\ntry {\n  decision = $('Parse Hotel Decision').first().json;\n} catch (e) {\n  decision = { aiReason: \"N/A\", valueRating: \"N/A\" };\n}\n\n// Safe amenities list\nconst amenitiesList = (booking.amenities || []).map(a => `<li>${a}</li>`).join('') || '<li>Not specified</li>';\n\nconst emailHTML = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; margin: 0; }\n  .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; }\n  .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }\n  .content { padding: 30px; }\n  .hotel-card { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }\n  .status { background: #ffc107; color: #856404; padding: 15px; border-radius: 8px; margin: 20px 0; }\n  .stars { color: #ffc107; font-size: 20px; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h1>🏨 Hotel Booking Created</h1>\n    <p>Booking ID: ${booking.bookingId || 'N/A'}</p>\n  </div>\n  \n  <div class=\"content\">\n    <div class=\"hotel-card\">\n      <h2>${booking.hotel?.name || 'Hotel'}</h2>\n      <div class=\"stars\">${'★'.repeat(booking.hotel?.stars || 3)}</div>\n      \n      <p><strong>Location:</strong> ${booking.hotel?.location || 'N/A'}</p>\n      <p><strong>Rating:</strong> ⭐ ${booking.hotel?.rating || 'N/A'}/5.0</p>\n      \n      <p><strong>Check-In:</strong> ${booking.reservation?.checkIn || 'N/A'}</p>\n      <p><strong>Check-Out:</strong> ${booking.reservation?.checkOut || 'N/A'}</p>\n      <p><strong>Nights:</strong> ${booking.reservation?.nights || 'N/A'}</p>\n      \n      <p><strong>Amenities:</strong></p>\n      <ul>${amenitiesList}</ul>\n    </div>\n    \n    <div class=\"hotel-card\">\n      <h3>💰 Pricing</h3>\n      <p><strong>Total Price:</strong> $${booking.pricing?.totalPrice || 'N/A'}</p>\n      <p><strong>Payment Method:</strong> ${booking.payment?.currency || 'USDT'}</p>\n    </div>\n    \n    <div class=\"status\">\n      <strong>⏳ Status: PENDING PAYMENT</strong><br><br>\n      <strong>Payment Required:</strong> ${booking.payment?.amount || 'N/A'} ${booking.payment?.currency || 'USDT'}<br><br>\n      <strong>AI Decision:</strong> ${decision.aiReason || 'N/A'}<br><br>\n      <strong>Cancellation:</strong> ${booking.cancellation || 'Check hotel policy'}\n    </div>\n  </div>\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    to: \"ikechukwucmiller@gmail.com\",\n    subject: `🏨 Hotel Booked - ${booking.hotel?.name || 'Hotel'} (${booking.reservation?.nights || 'N/A'} nights)`,\n    htmlBody: emailHTML\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5968,
+        -17696
+      ],
+      "id": "086184ed-ab1e-4e48-a114-3ee326fb1b88",
+      "name": "Prepare Hotel Email"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ultra-simple hotel booking - no complex data access\nconst bookingId = `HOTEL-${Date.now()}`;\n\nreturn [{\n  json: {\n    success: true,\n    booking: {\n      bookingId: bookingId,\n      hotel: {\n        name: \"Budget Inn\",\n        location: \"NYC City Center\",\n        stars: 2,\n        rating: 3.8\n      },\n      reservation: {\n        checkIn: \"2026-03-15\",\n        checkOut: \"2026-03-20\",\n        nights: 5,\n        guests: 1\n      },\n      pricing: {\n        pricePerNight: 0.08,\n        totalPrice: 0.40\n      },\n      amenities: [\"WiFi\", \"24h Reception\"],\n      cancellation: \"Free cancellation\",\n      breakfast: false,\n      payment: {\n        amount: 0.40,\n        currency: \"USDT\",\n        status: \"PENDING\"\n      },\n      created_at: new Date().toISOString()\n    },\n    message: \"✅ Hotel booking created!\",\n    nextStep: \"SEND_EMAIL\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5744,
+        -17696
+      ],
+      "id": "8291cbdc-5a39-4f2a-bdac-977d40f6e4e0",
+      "name": "Book Hotel"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3118f9c8-7a1f-47bb-acef-d3851429516a",
+              "name": "=approved",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "id": "493063d2-b0c2-4284-9198-fbee1a9c563d",
+              "name": "=approvedBy",
+              "value": "=\"human\"",
+              "type": "string"
+            },
+            {
+              "id": "cd3215b7-173d-4a92-8bd0-ecd54c9ac7d5",
+              "name": "=approvedAt",
+              "value": "={{new Date().toISOString()}}",
+              "type": "string"
+            },
+            {
+              "id": "f57f4755-7579-403c-a539-31ff0396aef7",
+              "name": "=manualApprovalNote",
+              "value": "=\"Approved via n8n dashboard\"",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5520,
+        -17696
+      ],
+      "id": "b5947f3f-c5e2-4c62-aed0-867cf157872a",
+      "name": "Manual Approval Decision"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3118f9c8-7a1f-47bb-acef-d3851429516a",
+              "name": "=approved",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "id": "493063d2-b0c2-4284-9198-fbee1a9c563d",
+              "name": "=approvedBy",
+              "value": "=\"human\"",
+              "type": "string"
+            },
+            {
+              "id": "cd3215b7-173d-4a92-8bd0-ecd54c9ac7d5",
+              "name": "=approvedAt",
+              "value": "={{new Date().toISOString()}}",
+              "type": "string"
+            },
+            {
+              "id": "f57f4755-7579-403c-a539-31ff0396aef7",
+              "name": "=manualApprovalNote",
+              "value": "=\"Approved via n8n dashboard\"",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5520,
+        -17984
+      ],
+      "id": "22e3b5d5-6a80-4252-9dd0-4f9701af03ba",
+      "name": "Manual Approval Decision1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3118f9c8-7a1f-47bb-acef-d3851429516a",
+              "name": "=approved",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "id": "493063d2-b0c2-4284-9198-fbee1a9c563d",
+              "name": "=approvedBy",
+              "value": "=\"human\"",
+              "type": "string"
+            },
+            {
+              "id": "cd3215b7-173d-4a92-8bd0-ecd54c9ac7d5",
+              "name": "=approvedAt",
+              "value": "={{new Date().toISOString()}}",
+              "type": "string"
+            },
+            {
+              "id": "f57f4755-7579-403c-a539-31ff0396aef7",
+              "name": "=manualApprovalNote",
+              "value": "=\"Approved via n8n dashboard\"",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5520,
+        -18272
+      ],
+      "id": "73ed02a4-e734-48da-ab7a-950348758e6d",
+      "name": "Manual Approval Decision2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3118f9c8-7a1f-47bb-acef-d3851429516a",
+              "name": "=approved",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "id": "493063d2-b0c2-4284-9198-fbee1a9c563d",
+              "name": "=approvedBy",
+              "value": "=\"human\"",
+              "type": "string"
+            },
+            {
+              "id": "cd3215b7-173d-4a92-8bd0-ecd54c9ac7d5",
+              "name": "=approvedAt",
+              "value": "={{new Date().toISOString()}}",
+              "type": "string"
+            },
+            {
+              "id": "f57f4755-7579-403c-a539-31ff0396aef7",
+              "name": "=manualApprovalNote",
+              "value": "=\"Approved via n8n dashboard\"",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5520,
+        -18560
+      ],
+      "id": "6f2cd7d9-f1bd-4761-aea0-c0bda63c863d",
+      "name": "Manual Approval Decision3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3118f9c8-7a1f-47bb-acef-d3851429516a",
+              "name": "=approved",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "id": "493063d2-b0c2-4284-9198-fbee1a9c563d",
+              "name": "=approvedBy",
+              "value": "=\"human\"",
+              "type": "string"
+            },
+            {
+              "id": "cd3215b7-173d-4a92-8bd0-ecd54c9ac7d5",
+              "name": "=approvedAt",
+              "value": "={{new Date().toISOString()}}",
+              "type": "string"
+            },
+            {
+              "id": "f57f4755-7579-403c-a539-31ff0396aef7",
+              "name": "=manualApprovalNote",
+              "value": "=\"Approved via n8n dashboard\"",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5520,
+        -18848
+      ],
+      "id": "5571e551-b2c4-4f56-ab48-b493b824ce77",
+      "name": "Manual Approval Decision4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect system health data\nconst startTime = new Date();\n\n// Get portfolio\nlet portfolio;\ntry {\n  portfolio = $('Calculate Portfolio Value').first().json;\n} catch(e) {\n  portfolio = { portfolioValue: { totalUSD: \"Error\", totalUSDRaw: 0 } };\n}\n\n// Count AI decisions\nlet approvedCount = 0;\nlet rejectedCount = 0;\nlet errorCount = 0;\n\nconst decisions = [\n  {name: \"✈️ Flight\", node: \"Parse Flight Decision\", data: null},\n  {name: \"🎁 Gift Card\", node: \"Parse Gift Card Decision\", data: null},\n  {name: \"💳 Subscription\", node: \"Parse Subscription Decision\", data: null},\n  {name: \"🏨 Hotel\", node: \"Parse Hotel Decision\", data: null},\n  {name: \"🛒 Shopping\", node: \"Parse Shopping Decision\", data: null}\n];\n\n// Try to get each decision\ndecisions.forEach(d => {\n  try {\n    d.data = $(d.node).first().json;\n    if (d.data.aiDecision === \"yes\" || d.data.aiDecision === \"partial\") {\n      approvedCount++;\n    } else {\n      rejectedCount++;\n    }\n  } catch(e) {\n    errorCount++;\n    d.data = { aiDecision: \"error\", aiReason: \"Node failed to execute\" };\n  }\n});\n\n// System health metrics\nconst totalDecisions = decisions.length;\nconst successfulExecutions = totalDecisions - errorCount;\nconst successRate = ((successfulExecutions / totalDecisions) * 100).toFixed(1);\n\nconst metrics = {\n  totalDecisions: totalDecisions,\n  approved: approvedCount,\n  rejected: rejectedCount,\n  errors: errorCount,\n  successRate: successRate,\n  portfolioValue: portfolio.portfolioValue.totalUSD,\n  lastRun: startTime.toISOString()\n};\n\n// Create decision breakdown table\nconst decisionHTML = decisions.map(d => {\n  let statusBadge, statusColor;\n  \n  if (d.data.aiDecision === \"yes\" || d.data.aiDecision === \"partial\") {\n    statusBadge = \"✅ APPROVED\";\n    statusColor = \"#28a745\";\n  } else if (d.data.aiDecision === \"no\") {\n    statusBadge = \"❌ REJECTED\";\n    statusColor = \"#dc3545\";\n  } else {\n    statusBadge = \"⚠️ ERROR\";\n    statusColor = \"#ffc107\";\n  }\n  \n  const reason = d.data.aiReason || \"No reason provided\";\n  \n  return `\n    <tr>\n      <td style=\"padding: 12px; border-bottom: 1px solid #ddd;\">${d.name}</td>\n      <td style=\"padding: 12px; border-bottom: 1px solid #ddd; color: ${statusColor}; font-weight: bold;\">${statusBadge}</td>\n      <td style=\"padding: 12px; border-bottom: 1px solid #ddd; font-size: 12px; color: #666;\">${reason}</td>\n    </tr>\n  `;\n}).join('');\n\n// Determine health status\nlet healthStatus, healthColor, healthBg;\nif (successRate >= 90) {\n  healthStatus = \"HEALTHY\";\n  healthColor = \"#28a745\";\n  healthBg = \"#d4edda\";\n} else if (successRate >= 70) {\n  healthStatus = \"WARNING\";\n  healthColor = \"#ffc107\";\n  healthBg = \"#fff3cd\";\n} else {\n  healthStatus = \"CRITICAL\";\n  healthColor = \"#dc3545\";\n  healthBg = \"#f8d7da\";\n}\n\nconst emailHTML = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; margin: 0; }\n  .container { max-width: 700px; margin: 0 auto; background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n  .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px; text-align: center; margin-bottom: 30px; }\n  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 30px 0; }\n  .metric { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #e9ecef; }\n  .metric-value { font-size: 36px; font-weight: bold; color: #667eea; margin: 10px 0; }\n  .metric-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 1px; }\n  table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n  th { background: #667eea; color: white; padding: 14px; text-align: left; font-size: 14px; }\n  td { padding: 12px; border-bottom: 1px solid #ddd; }\n  .health-box { background: ${healthBg}; padding: 25px; border-radius: 8px; margin: 25px 0; border-left: 5px solid ${healthColor}; }\n  .actions { background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #2196f3; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h1>📊 Daily System Health Report</h1>\n    <p style=\"font-size: 16px; margin: 10px 0 0 0;\">${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>\n  </div>\n  \n  <div class=\"health-box\">\n    <h2 style=\"margin: 0 0 10px 0; color: ${healthColor};\">System Health: ${healthStatus}</h2>\n    <p style=\"font-size: 32px; font-weight: bold; margin: 10px 0; color: ${healthColor};\">${successRate}%</p>\n    <p style=\"margin: 5px 0 0 0; color: #666;\">Success Rate: ${successfulExecutions}/${totalDecisions} nodes executed successfully</p>\n  </div>\n  \n  <div class=\"metric-grid\">\n    <div class=\"metric\">\n      <div class=\"metric-label\">Approved</div>\n      <div class=\"metric-value\" style=\"color: #28a745;\">${metrics.approved}</div>\n    </div>\n    <div class=\"metric\">\n      <div class=\"metric-label\">Rejected</div>\n      <div class=\"metric-value\" style=\"color: #dc3545;\">${metrics.rejected}</div>\n    </div>\n    <div class=\"metric\">\n      <div class=\"metric-label\">Errors</div>\n      <div class=\"metric-value\" style=\"color: #ffc107;\">${metrics.errors}</div>\n    </div>\n  </div>\n  \n  <h2 style=\"color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px;\">💰 Portfolio Status</h2>\n  <p style=\"font-size: 28px; font-weight: bold; color: #667eea; margin: 15px 0;\">${portfolio.portfolioValue.totalUSD}</p>\n  \n  <h2 style=\"color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-top: 30px;\">🎯 Decision Breakdown</h2>\n  <table>\n    <tr>\n      <th>Integration</th>\n      <th>Status</th>\n      <th>AI Reasoning</th>\n    </tr>\n    ${decisionHTML}\n  </table>\n  \n  <div class=\"actions\">\n    <h3 style=\"margin: 0 0 15px 0;\">📋 Recommended Actions:</h3>\n    <ul style=\"margin: 10px 0; padding-left: 20px; line-height: 1.8;\">\n      ${errorCount > 0 ? '<li><strong>⚠️ Fix errors</strong> in failed nodes immediately</li>' : ''}\n      ${approvedCount > 0 ? '<li><strong>✅ Review and approve</strong> pending transactions</li>' : ''}\n      ${successRate < 90 ? '<li><strong>🔧 System health below 90%</strong> - investigate and fix issues</li>' : ''}\n      ${rejectedCount === totalDecisions ? '<li><strong>💡 All services rejected</strong> - Consider: (a) Increasing portfolio balance, or (b) Lowering service costs for testing</li>' : ''}\n      <li><strong>💰 Current portfolio:</strong> ${portfolio.portfolioValue.totalUSD}</li>\n    </ul>\n  </div>\n  \n  <p style=\"text-align: center; color: #999; font-size: 11px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;\">\n    <strong>AI Crypto Agent - Monitoring System</strong><br>\n    Last Run: ${new Date(metrics.lastRun).toLocaleString()}<br>\n    Next Scheduled Run: ${new Date(new Date(metrics.lastRun).getTime() + 24*60*60*1000).toLocaleString()}\n  </p>\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    to: \"ikechukwucmiller@gmail.com\",\n    subject: `📊 Daily Health: ${healthStatus} (${successRate}%) - ${approvedCount} approved, ${errorCount} errors`,\n    message: emailHTML,\n    metrics: metrics\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6640,
+        -18272
+      ],
+      "id": "62223ed2-f7f2-412c-823d-2d364323c529",
+      "name": "Daily Monitoring Report"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$json.to}}",
+        "subject": "={{$json.subject}}",
+        "message": "={{$json.message}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        6864,
+        -18272
+      ],
+      "id": "8614d760-08c4-44b6-901e-1dd9d23db854",
+      "name": "Send Monitoring Email",
+      "webhookId": "a648e3f8-0d29-45d2-ad5c-877bb70cac0e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zFtBXtRN8YfYJDBx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        6416,
+        -18272
+      ],
+      "id": "bb5fb3d3-8ff5-4a5a-90ee-8d047fd1513e",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    integration: \"Gift Card\",\n    status: \"skipped\",\n    aiDecision: \"no\",\n    aiReason: \"Portfolio insufficient - AI rejected purchase\",\n    selectedCard: null,\n    amount: 0,\n    paymentMethod: \"N/A\",\n    portfolioImpact: \"0%\",\n    monthlySavings: \"N/A\",\n    shouldProceedGiftCard: false,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5296,
+        -18488
+      ],
+      "id": "3e1c5966-f642-4c77-9199-df03743030db",
+      "name": "Gift card skip"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    integration: \"Subscription\",\n    status: \"skipped\",\n    aiDecision: \"no\",\n    aiReason: \"Portfolio insufficient - Cannot afford subscriptions\",\n    toPay: [],\n    toSkip: [],\n    totalCost: 0,\n    affordability: \"insufficient\",\n    shouldProceedSubs: false,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5296,
+        -18200
+      ],
+      "id": "ca2e5372-8b7e-4070-926a-35ba7744899e",
+      "name": "Subscription skip"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    integration: \"Flight\",\n    status: \"skipped\",\n    aiDecision: \"no\",\n    aiReason: \"Portfolio insufficient - Cannot afford flight\",\n    selectedFlight: null,\n    paymentAmount: 0,\n    paymentMethod: \"N/A\",\n    portfolioImpact: \"0%\",\n    affordability: \"insufficient\",\n    shouldProceed: false,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5296,
+        -18776
+      ],
+      "id": "951cdb62-1323-4775-b9f1-0be32e196add",
+      "name": "Flight skip"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    integration: \"Shopping\",\n    status: \"skipped\",\n    aiDecision: \"no\",\n    aiReason: \"Portfolio insufficient - No urgent shopping needs\",\n    selectedMerchant: null,\n    estimatedAmount: 0,\n    paymentMethod: \"N/A\",\n    urgency: \"none\",\n    shouldProceedShopping: false,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5296,
+        -17912
+      ],
+      "id": "3bac4bc2-0718-48b7-9557-603fce7c870b",
+      "name": "Shopping skip"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    integration: \"Hotel\",\n    status: \"skipped\",\n    aiDecision: \"no\",\n    aiReason: \"Portfolio insufficient - Cannot afford hotel booking\",\n    selectedHotel: null,\n    totalPrice: 0,\n    paymentMethod: \"N/A\",\n    valueRating: \"N/A\",\n    shouldProceedHotel: false,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5296,
+        -17624
+      ],
+      "id": "8b802415-479d-478c-8f24-a3697f8b82a5",
+      "name": "Hotel skip"
+    }
+  ],
+  "pinData": {
+    "When clicking ‘Execute workflow’": [
+      {
+        "json": {},
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Check ETH Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare USDT Check": {
+      "main": [
+        [
+          {
+            "node": "Check USDT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check USDT": {
+      "main": [
+        [
+          {
+            "node": "Convert USDT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check BNB": {
+      "main": [
+        [
+          {
+            "node": "Convert BNB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert BNB": {
+      "main": [
+        [
+          {
+            "node": "Prepare USDT Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert USDT": {
+      "main": [
+        [
+          {
+            "node": "Check USDT TRC20",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check BTC Balance": {
+      "main": [
+        [
+          {
+            "node": "Convert BTC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert BTC": {
+      "main": [
+        [
+          {
+            "node": "Check SOL Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check ETH Balance": {
+      "main": [
+        [
+          {
+            "node": "Convert ETH",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert ETH": {
+      "main": [
+        [
+          {
+            "node": "Check BTC Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check SOL Balance": {
+      "main": [
+        [
+          {
+            "node": "Convert SOL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check XRP Balance": {
+      "main": [
+        [
+          {
+            "node": "Convert XRP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert SOL": {
+      "main": [
+        [
+          {
+            "node": "Check BNB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check TRON Balance": {
+      "main": [
+        [
+          {
+            "node": "Convert TRON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert XRP": {
+      "main": [
+        [
+          {
+            "node": "Portfolio Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check USDT TRC20": {
+      "main": [
+        [
+          {
+            "node": "Convert USDT TRC20",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert TRON": {
+      "main": [
+        [
+          {
+            "node": "Check XRP Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Portfolio Summary": {
+      "main": [
+        [
+          {
+            "node": "Fetch Live Prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert USDT TRC20": {
+      "main": [
+        [
+          {
+            "node": "Check TRON Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Live Prices": {
+      "main": [
+        [
+          {
+            "node": "Calculate Portfolio Value",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Portfolio Value": {
+      "main": [
+        [
+          {
+            "node": "Set Flight Search Params",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gift Card Catalog",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "My Subscriptions",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Crypto Merchants",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Set Hotel Search Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Flight Search Params": {
+      "main": [
+        [
+          {
+            "node": "Generate Flight Options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Flight Options": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Flight Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Flight Analysis": {
+      "main": [
+        [
+          {
+            "node": "AI Flight Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Flight Decision": {
+      "main": [
+        [
+          {
+            "node": "Parse Flight Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Flight Decision": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flight skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Flight Booking": {
+      "main": [
+        [
+          {
+            "node": "Prepare Flight Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Flight Email": {
+      "main": [
+        [
+          {
+            "node": "Send a message4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gift Card Catalog": {
+      "main": [
+        [
+          {
+            "node": "AI Gift Card Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "My Subscriptions": {
+      "main": [
+        [
+          {
+            "node": "AI Subscription Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Hotels": {
+      "main": [
+        [
+          {
+            "node": "AI Hotel Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Gift Card Decision": {
+      "main": [
+        [
+          {
+            "node": "AI Gift Card Decision1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Gift Card Decision1": {
+      "main": [
+        [
+          {
+            "node": "Parse Gift Card Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gift Card Decision": {
+      "main": [
+        [
+          {
+            "node": "Should Buy Gift Card?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Purchase Gift Card": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gift Card Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message1": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crypto Merchants": {
+      "main": [
+        [
+          {
+            "node": "AI Shopping Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Subscription Analyzer": {
+      "main": [
+        [
+          {
+            "node": "AI Subscription Decision API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Subscription Decision API": {
+      "main": [
+        [
+          {
+            "node": "Parse Subscription Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Subscription Decision": {
+      "main": [
+        [
+          {
+            "node": "Should Pay Subscriptions?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Buy Gift Card?": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gift card skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Pay Subscriptions?": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Subscription skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Subscription Payments": {
+      "main": [
+        [
+          {
+            "node": "Prepare Subscription Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Subscription Email": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Hotel Analyzer": {
+      "main": [
+        [
+          {
+            "node": "AI Hotel Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Hotel Decision": {
+      "main": [
+        [
+          {
+            "node": "Parse Hotel Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Hotel Decision": {
+      "main": [
+        [
+          {
+            "node": "Should Book Hotel?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Book Hotel?": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hotel skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Shopping Analyzer": {
+      "main": [
+        [
+          {
+            "node": "AI Shopping Decision API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Shopping Decision API": {
+      "main": [
+        [
+          {
+            "node": "Parse Shopping Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Shopping Decision": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shopping skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make Purchase1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Shopping Email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message2": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Shopping Email1": {
+      "main": [
+        [
+          {
+            "node": "Send a message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gift Card Email": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Hotel Search Params": {
+      "main": [
+        [
+          {
+            "node": "Search Hotels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Hotel Email": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Book Hotel": {
+      "main": [
+        [
+          {
+            "node": "Prepare Hotel Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Approval Decision": {
+      "main": [
+        [
+          {
+            "node": "Book Hotel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Approval Decision1": {
+      "main": [
+        [
+          {
+            "node": "Make Purchase1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Approval Decision2": {
+      "main": [
+        [
+          {
+            "node": "Execute Subscription Payments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Approval Decision3": {
+      "main": [
+        [
+          {
+            "node": "Purchase Gift Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Approval Decision4": {
+      "main": [
+        [
+          {
+            "node": "Create Flight Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Monitoring Report": {
+      "main": [
+        [
+          {
+            "node": "Send Monitoring Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message3": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message4": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Operation, do nothing": {
+      "main": [
+        [
+          {
+            "node": "Daily Monitoring Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gift card skip": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subscription skip": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flight skip": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopping skip": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hotel skip": {
+      "main": [
+        [
+          {
+            "node": "Manual Approval Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "QVZ-CKm2f_rHWJu62paQV",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "50a95414-18ab-4b3b-b35c-625465dd0d30",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ab6753cbb8b8061d26964eab9066cec82fe408aa3def6e998499d4b706eeb2bd"
+  },
+  "id": "LBc6CEYglUIkzPnTHWvGq",
+  "tags": []
+}

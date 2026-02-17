@@ -1,0 +1,90 @@
+{
+  "name": "Error handle code",
+  "nodes": [
+    {
+      "parameters": {
+        "sendTo": "={{$json.to}}",
+        "subject": "={{$json.subject}}",
+        "message": "={{$json.message}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "e33e959e-1f33-4f9b-8f6a-b5c86f7a3659",
+      "name": "Send a message",
+      "webhookId": "9588f7c2-e9b4-4907-8f83-495eee3149da",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zFtBXtRN8YfYJDBx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ce0f774d-cb79-4b78-8eaa-8102e681ba03",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get error information from the error trigger\nconst errorData = $input.first().json;\n\nconst workflowName = errorData.workflow?.name || \"AI Crypto Agent\";\nconst errorNode = errorData.node?.name || \"Unknown\";\nconst errorMessage = errorData.error?.message || \"Unknown error\";\nconst executionId = errorData.execution?.id || \"Unknown\";\nconst errorTime = new Date().toISOString();\n\nconst emailHTML = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; margin: 0; }\n  .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n  .header { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; padding: 30px; border-radius: 8px; text-align: center; margin-bottom: 30px; }\n  .error-box { background: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 20px 0; border-radius: 4px; }\n  .code { background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 12px; }\n  .action-box { background: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 20px 0; border-radius: 4px; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h1>🚨 WORKFLOW ERROR ALERT</h1>\n    <p>Critical error detected in your AI Crypto Agent</p>\n  </div>\n  \n  <div class=\"error-box\">\n    <h2>⚠️ Error Details:</h2>\n    <p><strong>Workflow:</strong> ${workflowName}</p>\n    <p><strong>Failed Node:</strong> ${errorNode}</p>\n    <p><strong>Execution ID:</strong> ${executionId}</p>\n    <p><strong>Time:</strong> ${new Date(errorTime).toLocaleString()}</p>\n  </div>\n  \n  <div class=\"error-box\">\n    <h3>Error Message:</h3>\n    <div class=\"code\">${errorMessage}</div>\n  </div>\n  \n  <div class=\"action-box\">\n    <h3>⚡ Immediate Action Required:</h3>\n    <ol>\n      <li>Login to n8n dashboard</li>\n      <li>Navigate to Executions</li>\n      <li>Find execution: ${executionId}</li>\n      <li>Check the failed node: ${errorNode}</li>\n      <li>Fix the error and re-run</li>\n    </ol>\n    <p><strong>Dashboard:</strong> <a href=\"https://ikechukwumm.app.n8n.cloud/executions\">View Executions →</a></p>\n  </div>\n  \n  <p style=\"text-align: center; color: #666; font-size: 12px; margin-top: 30px;\">\n    AI Crypto Agent Error Alert System<br>\n    Generated: ${new Date(errorTime).toLocaleString()}\n  </p>\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    to: \"ikechukwucmiller@gmail.com\",\n    subject: `🚨 URGENT: Workflow Error in ${errorNode}`,\n    message: emailHTML\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "7d46516f-75fc-4103-9b05-3a7971d56709",
+      "name": "Format Error Email"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error Email": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "7df2d298-1bd8-418f-91f3-e12933776a7a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ab6753cbb8b8061d26964eab9066cec82fe408aa3def6e998499d4b706eeb2bd"
+  },
+  "id": "QVZ-CKm2f_rHWJu62paQV",
+  "tags": []
+}
